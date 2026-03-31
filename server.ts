@@ -1,0 +1,74 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
+import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import path from 'path';
+import fs from 'fs';
+
+const slipRoutes: express.Router = require('./routes/slips').default;
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  ...(process.env.APP_URL ? [process.env.APP_URL] : []),
+  ...(process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim())
+    : []),
+].filter(Boolean);
+
+// ── Middleware
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
+  credentials: true,
+}));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// ── Temp directory
+const tempDir = path.join(__dirname, 'temp');
+if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+// ── Routes
+app.use('/api/slips', slipRoutes);
+
+// Health check
+app.get('/api/health', (req: Request, res: Response) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// 404 handler
+app.use((req: Request, res: Response) => {
+  res.status(404).json({ success: false, message: `Route ${req.method} ${req.path} not found` });
+});
+
+// Global error handler
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  console.error('Global error:', err);
+  res.status(500).json({ success: false, message: err.message || 'Internal server error' });
+});
+
+// Connect to MongoDB & start
+mongoose.connect(process.env.MONGODB_URI || '')
+  .then(() => {
+    console.log('✅ MongoDB connected');
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on http://localhost:${PORT}`);
+      console.log(`📧 Email: ${process.env.EMAIL_USER}`);
+      console.log(`☁️  GCS Bucket: ${process.env.GCS_BUCKET_NAME}`);
+    });
+  })
+  .catch((err: any) => {
+    console.error('❌ MongoDB connection failed:', err.message);
+    process.exit(1);
+  });
