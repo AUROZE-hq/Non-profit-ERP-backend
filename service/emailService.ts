@@ -4,7 +4,7 @@ const nodemailer = require('nodemailer');
 
 const COMPANY_NAME   = process.env.COMPANY_NAME    || 'Your Company';
 const COMPANY_EMAIL  = process.env.COMPANY_EMAIL   || 'company@example.com';
-const APP_URL        = process.env.APP_URL          || 'http://localhost:3000';
+const APP_URL        = process.env.APP_URL          || 'http://localhost:5173';
 const BACKEND_URL    = process.env.BACKEND_URL      || 'http://localhost:5000';
 
 // ── Transporter ───────────────────────────────────────────────────────────────

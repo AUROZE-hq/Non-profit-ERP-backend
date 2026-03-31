@@ -23,6 +23,8 @@ const router = express.Router();
 router.post('/', async (req: Request, res: Response) => {
   try {
     const body: any = req.body || {};
+    const channel = body.channel === 'whatsapp' ? 'whatsapp' : 'email';
+    const now = new Date();
     const slipData: any = {
       employee: body.employee || {},
       period: body.period || { month: 1, year: new Date().getFullYear() },
@@ -31,6 +33,8 @@ router.post('/', async (req: Request, res: Response) => {
       netSalary: body.netSalary || 0,
       notes: body.notes || '',
       status: body.sendEmail ? 'pending_signature' : (body.status || 'draft'),
+      deliveryChannel: channel,
+      lastActivityAt: now,
       signatureToken: uuidv4(),
     };
 
@@ -61,10 +65,18 @@ router.post('/', async (req: Request, res: Response) => {
         await emailService.sendSalarySlipEmail({ employee: slip.employee, slip, pdfPath: slip.pdfPath });
         slip.sentAt = new Date();
         slip.status = 'sent';
+        slip.lastActivityAt = new Date();
         await slip.save();
       } catch (e: any) {
         console.error('Email send failed', e.message || e);
       }
+    }
+
+    if (channel === 'whatsapp') {
+      slip.sentAt = slip.sentAt || now;
+      slip.status = slip.status === 'draft' ? 'pending_signature' : slip.status;
+      slip.lastActivityAt = new Date();
+      await slip.save();
     }
 
     res.json({ success: true, slip });
@@ -88,8 +100,18 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/token/:token', async (req: Request, res: Response) => {
   try {
     const token = req.params.token;
-    const slip = await SalarySlip.findOne({ signatureToken: token }).lean();
+    const slip: any = await SalarySlip.findOne({ signatureToken: token });
     if (!slip) return res.status(404).json({ success: false, message: 'Slip not found' });
+
+    if (!slip.viewedAt) {
+      slip.viewedAt = new Date();
+    }
+    if (slip.status === 'sent') {
+      slip.status = 'pending_signature';
+    }
+    slip.lastActivityAt = new Date();
+    await slip.save();
+
     res.json({ success: true, slip });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
@@ -109,6 +131,7 @@ router.post('/:id/sign', async (req: Request, res: Response) => {
     slip.signatureData = signatureData;
     slip.signedAt = new Date();
     slip.status = 'completed';
+    slip.lastActivityAt = new Date();
 
     // generate signed PDF and upload
     if (generateSalarySlipPDF) {
