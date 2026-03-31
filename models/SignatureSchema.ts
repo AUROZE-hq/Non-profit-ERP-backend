@@ -11,6 +11,8 @@ export type SalarySlipStatus =
   | 'signed'
   | 'completed';
 
+export type DeliveryChannel = 'email' | 'whatsapp';
+
 /**
  * Interface
  */
@@ -50,8 +52,12 @@ export interface ISalarySlip extends Document {
 
   status: SalarySlipStatus;
 
+  deliveryChannel?: DeliveryChannel;
+
   sentAt?: Date;
+  viewedAt?: Date;
   signedAt?: Date;
+  lastActivityAt?: Date;
 
   signatureData?: string;
   signatureToken?: string;
@@ -110,8 +116,16 @@ const salarySlipSchema = new Schema<ISalarySlip>(
       default: 'draft',
     },
 
+    deliveryChannel: {
+      type: String,
+      enum: ['email', 'whatsapp'],
+      default: 'email',
+    },
+
     sentAt: Date,
+    viewedAt: Date,
     signedAt: Date,
+    lastActivityAt: Date,
 
     signatureData: String,
     signatureToken: String,
