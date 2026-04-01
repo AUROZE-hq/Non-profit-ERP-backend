@@ -2,15 +2,15 @@
 
 const nodemailer = require('nodemailer');
 
-const COMPANY_NAME   = process.env.COMPANY_NAME    || 'Your Company';
-const COMPANY_EMAIL  = process.env.COMPANY_EMAIL   || 'company@example.com';
-const APP_URL        = process.env.APP_URL          || 'http://localhost:5173';
-const BACKEND_URL    = process.env.BACKEND_URL      || 'http://localhost:5000';
+const COMPANY_NAME = process.env.COMPANY_NAME || 'Your Company';
+const COMPANY_EMAIL = process.env.COMPANY_EMAIL || 'company@example.com';
+const APP_URL = process.env.APP_URL || 'http://localhost:5173';
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:5000';
 
 // ── Transporter ───────────────────────────────────────────────────────────────
 const transporter = nodemailer.createTransport({
-  host:   process.env.EMAIL_HOST || 'smtp.gmail.com',
-  port:   parseInt(process.env.EMAIL_PORT || '587'),
+  host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.EMAIL_PORT || '587'),
   secure: false,
   auth: {
     user: process.env.EMAIL_USER,
@@ -21,10 +21,10 @@ const transporter = nodemailer.createTransport({
 /**
  * Send salary slip to employee with a signing link.
  */
-async function sendSalarySlipEmail({ employee, slip, pdfPath }:any) {
+async function sendSalarySlipEmail({ employee, slip, pdfPath }: any) {
   const signUrl = `${APP_URL}/sign/${slip.signatureToken}`;
-  const MONTHS  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const period  = `${MONTHS[(slip.period.month || 1) - 1]} ${slip.period.year}`;
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const period = `${MONTHS[(slip.period.month || 1) - 1]} ${slip.period.year}`;
 
   const html = `
 <!DOCTYPE html>
@@ -32,75 +32,233 @@ async function sendSalarySlipEmail({ employee, slip, pdfPath }:any) {
 <head>
   <meta charset="UTF-8">
   <style>
-    body { font-family: 'Segoe UI', Arial, sans-serif; background:#f4f6fb; margin:0; padding:0; }
-    .container { max-width:600px; margin:30px auto; background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,0.08); }
-    .header { background:#1a1a2e; padding:32px 40px; }
-    .header h1 { color:#f0c040; margin:0; font-size:22px; letter-spacing:1px; }
-    .header p { color:#ccccdd; margin:6px 0 0; font-size:13px; }
-    .body { padding:36px 40px; }
-    .greeting { font-size:16px; color:#1a1a2e; font-weight:600; margin-bottom:8px; }
-    .message { font-size:14px; color:#555566; line-height:1.7; margin-bottom:24px; }
-    .slip-card { background:#f8f9fc; border:1px solid #e0e4f0; border-radius:10px; padding:20px 24px; margin-bottom:28px; }
-    .slip-card .row { display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px; }
-    .slip-card .label { color:#888899; }
-    .slip-card .value { color:#1a1a2e; font-weight:600; }
-    .net { background:#1a1a2e; border-radius:8px; padding:14px 24px; display:flex; justify-content:space-between; margin-top:12px; }
-    .net .label { color:#ccccdd; font-size:14px; }
-    .net .value { color:#f0c040; font-size:18px; font-weight:700; }
-    .cta { text-align:center; margin:28px 0 20px; }
-    .btn { display:inline-block; background:#f0c040; color:#1a1a2e; font-weight:700; font-size:15px; padding:14px 36px; border-radius:8px; text-decoration:none; letter-spacing:0.5px; }
-    .note { font-size:12px; color:#aaaaaa; text-align:center; margin-top:16px; line-height:1.6; }
-    .footer { background:#f0f0f5; padding:20px 40px; text-align:center; font-size:11px; color:#aaaaaa; }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f4f6fb;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 620px;
+      margin: 40px auto;
+      background: #ffffff;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 6px 28px rgba(0,0,0,0.08);
+    }
+
+    .header {
+      background: #1a1a2e;
+      padding: 36px 42px;
+    }
+
+    .header h1 {
+      color: #f0c040;
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: 1px;
+    }
+
+    .header p {
+      color: #ccccdd;
+      margin-top: 10px;
+      font-size: 13px;
+    }
+
+    .body {
+      padding: 42px;
+    }
+
+    .greeting {
+      font-size: 17px;
+      color: #1a1a2e;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .message {
+      font-size: 14px;
+      color: #555566;
+      line-height: 1.8;
+      margin-bottom: 30px;
+    }
+
+    .slip-card {
+      background: #f8f9fc;
+      border: 1px solid #e0e4f0;
+      border-radius: 12px;
+      padding: 24px 28px;
+      margin-bottom: 32px;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      font-size: 14px;
+    }
+
+    .label {
+      color: #888899;
+    }
+
+    .value {
+      color: #1a1a2e;
+      font-weight: 600;
+    }
+
+    .divider {
+      height: 1px;
+      background: #e6e8f2;
+      margin: 18px 0;
+    }
+
+    .net {
+      background: #1a1a2e;
+      border-radius: 10px;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      margin-top: 18px;
+    }
+
+    .net .label {
+      color: #ccccdd;
+      font-size: 14px;
+    }
+
+    .net .value {
+      color: #f0c040;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .cta {
+      text-align: center;
+      margin: 36px 0 24px;
+    }
+
+    .btn {
+      display: inline-block;
+      background: #f0c040;
+      color: #1a1a2e;
+      font-weight: 700;
+      font-size: 15px;
+      padding: 16px 40px;
+      border-radius: 10px;
+      text-decoration: none;
+      letter-spacing: 0.5px;
+    }
+
+    .note {
+      font-size: 12px;
+      color: #999aaa;
+      text-align: center;
+      margin-top: 20px;
+      line-height: 1.7;
+    }
+
+    .footer {
+      background: #f0f0f5;
+      padding: 24px 40px;
+      text-align: center;
+      font-size: 11px;
+      color: #aaaaaa;
+      line-height: 1.6;
+    }
   </style>
 </head>
+
 <body>
   <div class="container">
+
     <div class="header">
       <h1>${COMPANY_NAME}</h1>
       <p>Salary Slip — ${period}</p>
     </div>
+
     <div class="body">
+
       <p class="greeting">Dear ${employee.name},</p>
+
       <p class="message">
         Your salary slip for <strong>${period}</strong> has been prepared.
         Please review the details below and click the button to sign digitally.
-        Once signed, a copy will be saved to our records.
+        Once signed, a copy will be securely stored in our records.
       </p>
 
       <div class="slip-card">
-        <div class="row"><span class="label">Employee ID</span><span class="value">${slip.employee.employeeId}</span></div>
-        <div class="row"><span class="label">Department</span><span class="value">${slip.employee.department}</span></div>
-        <div class="row"><span class="label">Period</span><span class="value">${period}</span></div>
-        <div class="row"><span class="label">Basic Salary</span><span class="value">LKR ${fmt(slip.earnings.basicSalary)}</span></div>
-        <div class="row"><span class="label">Allowances</span><span class="value">LKR ${fmt(slip.earnings.allowances)}</span></div>
-        <div class="row"><span class="label">Bonus</span><span class="value">LKR ${fmt(slip.earnings.bonus)}</span></div>
-        <div class="row"><span class="label">Deductions</span><span class="value">- LKR ${fmt((slip.deductions.tax||0)+(slip.deductions.insurance||0)+(slip.deductions.other||0))}</span></div>
+
+        <div class="row">
+          <span class="label">Department</span>
+          <span class="value">${slip.employee.department}</span>
+        </div>
+
+        <div class="row">
+          <span class="label">Period</span>
+          <span class="value">${period}</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <span class="label">Basic Salary</span>
+          <span class="value">LKR ${fmt(slip.earnings.basicSalary)}</span>
+        </div>
+
+        <div class="row">
+          <span class="label">Allowances</span>
+          <span class="value">LKR ${fmt(slip.earnings.allowances)}</span>
+        </div>
+
+        <div class="row">
+          <span class="label">Bonus</span>
+          <span class="value">LKR ${fmt(slip.earnings.bonus)}</span>
+        </div>
+
+        <div class="row">
+          <span class="label">Deductions</span>
+          <span class="value">- LKR ${fmt(
+    (slip.deductions.tax || 0) +
+    (slip.deductions.insurance || 0) +
+    (slip.deductions.other || 0)
+  )}</span>
+        </div>
+
         <div class="net">
           <span class="label">Net Salary</span>
           <span class="value">LKR ${fmt(slip.netSalary)}</span>
         </div>
+
       </div>
 
       <div class="cta">
-        <a href="${signUrl}" class="btn">✍️ &nbsp; Sign My Salary Slip</a>
+        <a href="${signUrl}" class="btn">✍️ Sign My Salary Slip</a>
       </div>
+
       <p class="note">
-        This link is unique to you and expires after signing.<br>
-        If you did not expect this email, contact us at ${COMPANY_EMAIL}.
+        This link is unique to you and will expire after signing.<br>
+        If you did not expect this email, please contact us at ${COMPANY_EMAIL}.
       </p>
+
     </div>
+
     <div class="footer">
-      © ${new Date().getFullYear()} ${COMPANY_NAME} · ${COMPANY_EMAIL}<br>
-      This is an automated email — please do not reply directly.
+      © ${new Date().getFullYear()} ${COMPANY_NAME}<br>
+      ${COMPANY_EMAIL}<br><br>
+      This is an automated email — please do not reply.
     </div>
+
   </div>
 </body>
-</html>`;
+</html>
+`;
 
   await transporter.sendMail({
-    from:        `"${COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
-    to:          employee.email,
-    subject:     `Your Salary Slip – ${period} | ${COMPANY_NAME}`,
+    from: `"${COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
+    to: employee.email,
+    subject: `Your Salary Slip – ${period} | ${COMPANY_NAME}`,
     html,
     attachments: pdfPath ? [{ filename: `Salary_Slip_${period}.pdf`, path: pdfPath }] : [],
   });
@@ -109,8 +267,8 @@ async function sendSalarySlipEmail({ employee, slip, pdfPath }:any) {
 /**
  * Notify owner that an employee has signed.
  */
-async function sendSignatureConfirmationEmail({ slip, ownerEmail }:any) {
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+async function sendSignatureConfirmationEmail({ slip, ownerEmail }: any) {
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const period = `${MONTHS[(slip.period.month || 1) - 1]} ${slip.period.year}`;
 
   const html = `
@@ -151,14 +309,14 @@ async function sendSignatureConfirmationEmail({ slip, ownerEmail }:any) {
 </html>`;
 
   await transporter.sendMail({
-    from:    `"${COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
-    to:      ownerEmail,
+    from: `"${COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
+    to: ownerEmail,
     subject: `✅ Signed: ${slip.employee.name}'s Salary Slip – ${period}`,
     html,
   });
 }
 
-function fmt(n:any) {
+function fmt(n: any) {
   return Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
