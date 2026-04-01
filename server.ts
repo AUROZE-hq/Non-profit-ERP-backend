@@ -58,8 +58,20 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   res.status(500).json({ success: false, message: err.message || 'Internal server error' });
 });
 
+
+// Validate MONGODB_URI before attempting connection
+const rawMongoUri = process.env.MONGODB_URI || '';
+if (!rawMongoUri || rawMongoUri.includes('<db_password') || rawMongoUri.includes('<password')) {
+  console.error('❌ MONGODB_URI is not set or contains a placeholder.');
+  console.error('  - Open .env and set a proper MONGODB_URI, for example:');
+  console.error('    mongodb+srv://<user>:<password>@cluster0.gikzcgt.mongodb.net/myDatabase?retryWrites=true&w=majority');
+  console.error('  - If the password has special characters, URL-encode it (use encodeURIComponent).');
+  process.exit(1);
+}
+
 // Connect to MongoDB & start
-mongoose.connect(process.env.MONGODB_URI || '')
+mongoose
+  .connect(rawMongoUri, { autoIndex: true })
   .then(() => {
     console.log('✅ MongoDB connected');
     app.listen(PORT, () => {
@@ -69,6 +81,13 @@ mongoose.connect(process.env.MONGODB_URI || '')
     });
   })
   .catch((err: any) => {
-    console.error('❌ MongoDB connection failed:', err.message);
+    console.error('❌ MongoDB connection failed:');
+    console.error('  message:', err.message);
+    if (err.name === 'MongoParseError' || /ENOTFOUND/i.test(err.message)) {
+      console.error('  - DNS/host lookup failed. Check the cluster host in MONGODB_URI.');
+    }
+    if (/authentication failed|bad auth/i.test(err.message)) {
+      console.error('  - Authentication failed. Verify username and password in MONGODB_URI.');
+    }
     process.exit(1);
   });
