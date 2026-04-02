@@ -316,8 +316,57 @@ async function sendSignatureConfirmationEmail({ slip, ownerEmail }: any) {
   });
 }
 
+/**
+ * Send forgot password email with a reset link.
+ */
+async function sendForgotPasswordEmail({ email, name, resetUrl }: any) {
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family:'Segoe UI',Arial,sans-serif; background:#f4f6fb; margin:0; padding:0; }
+    .container { max-width:560px; margin:40px auto; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,0.08); }
+    .header { background:#1a1a2e; padding:32px; text-align:center; }
+    .header h1 { color:#f0c040; margin:0; font-size:24px; }
+    .body { padding:40px; font-size:15px; color:#333344; line-height:1.7; }
+    .cta { text-align:center; margin:32px 0; }
+    .btn { display:inline-block; background:#f0c040; color:#1a1a2e; font-weight:700; padding:16px 40px; border-radius:10px; text-decoration:none; }
+    .footer { background:#f0f0f5; padding:24px; text-align:center; font-size:12px; color:#aaa; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Password Reset Request</h1>
+    </div>
+    <div class="body">
+      <p>Hello ${name},</p>
+      <p>We received a request to reset your password for your ${COMPANY_NAME} account. Click the button below to choose a new password:</p>
+      <div class="cta">
+        <a href="${resetUrl}" class="btn">Reset Password</a>
+      </div>
+      <p>If you did not request a password reset, please ignore this email or contact support if you have concerns.</p>
+      <p>This link will expire in 1 hour.</p>
+    </div>
+    <div class="footer">
+      © ${new Date().getFullYear()} ${COMPANY_NAME}<br>
+      This is an automated email — please do not reply.
+    </div>
+  </div>
+</body>
+</html>`;
+
+  await transporter.sendMail({
+    from: `"${COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: `Password Reset Request – ${COMPANY_NAME}`,
+    html,
+  });
+}
+
 function fmt(n: any) {
   return Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-module.exports = { sendSalarySlipEmail, sendSignatureConfirmationEmail };
+module.exports = { sendSalarySlipEmail, sendSignatureConfirmationEmail, sendForgotPasswordEmail };

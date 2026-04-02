@@ -6,13 +6,27 @@ import path from 'path';
 // allow safe require for optional JS services
 const requireAny: any = require;
 
-// Try to require existing services (may not exist)
+// Import PDF and Cloudinary services
 let generateSalarySlipPDF: any = null;
-try { generateSalarySlipPDF = requireAny('../services/pdfService').generateSalarySlipPDF; } catch (_) { /* noop */ }
-let uploadToGCS: any = null;
-try { uploadToGCS = requireAny('../services/gcsService').uploadToGCS; } catch (_) { /* noop */ }
+try {
+  generateSalarySlipPDF = require('../services/pdfService').generateSalarySlipPDF;
+} catch (e: any) {
+  console.warn('PDF Service not found or failed to load:', e.message);
+}
+
+let uploadToCloudinary: any = null;
+try {
+  uploadToCloudinary = require('../services/cloudinaryService').uploadToCloudinary;
+} catch (e: any) {
+  console.warn('Cloudinary Service not found or failed to load:', e.message);
+}
+
 let emailService: any = null;
-try { emailService = requireAny('../service/emailService'); } catch (_) { /* noop */ }
+try {
+  emailService = require('../service/emailService');
+} catch (e: any) {
+  console.warn('Email Service not found or failed to load:', e.message);
+}
 
 // Import SalarySlip model (TypeScript model file exists)
 import { SalarySlip } from '../models/SignatureSchema';
@@ -44,18 +58,31 @@ router.post('/', async (req: Request, res: Response) => {
     // generate PDF if pdf service available
     if (generateSalarySlipPDF) {
       try {
+        console.log(`Generating draft PDF for slip ${slip._id}...`);
         const pdfPath = await generateSalarySlipPDF(slip, { includeSignature: false });
         slip.pdfPath = pdfPath;
-        // upload to GCS if available
-        if (uploadToGCS) {
+        console.log(`Draft PDF generated at: ${pdfPath}`);
+
+        // upload to Cloudinary if available
+        if (uploadToCloudinary) {
+          console.log(`Uploading draft PDF to Cloudinary...`);
           const destName = `finance/salary_slip_${slip.slipId || slip._id}.pdf`;
-          const { gcsUrl, gcsFileName } = await uploadToGCS(pdfPath, destName);
-          slip.gcsUrl = gcsUrl;
-          slip.gcsFileName = gcsFileName;
+          const cloudinaryData = await uploadToCloudinary(pdfPath, destName);
+          console.log(`Cloudinary draft upload success: ${cloudinaryData.cloudinaryUrl}`);
+          
+          slip.pdfUrl = cloudinaryData.cloudinaryUrl;
+          slip.pdfPublicId = cloudinaryData.publicId;
+          slip.pdfAssetId = cloudinaryData.assetId;
+          slip.pdfFormat = cloudinaryData.format;
+          slip.pdfFolder = cloudinaryData.folder;
+          slip.pdfFileName = cloudinaryData.fileName;
+          slip.storageProvider = 'cloudinary';
+        } else {
+          console.warn('Cloudinary service not available for draft.');
         }
         await slip.save();
       } catch (e: any) {
-        console.error('PDF/GCS generation error', e.message || e);
+        console.error('PDF/Cloudinary draft generation/upload error:', e.message || e);
       }
     }
 
@@ -83,6 +110,35 @@ router.post('/', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message || 'Failed to create slip' });
+  }
+});
+
+// Get finance documents for frontend
+router.get('/documents', async (req: Request, res: Response) => {
+  try {
+    const slips = await SalarySlip.find({
+      $or: [
+        { status: 'completed' },
+        { status: 'signed' },
+        { signedAt: { $exists: true, $ne: null } },
+        { pdfUrl: { $exists: true, $ne: null } }
+      ]
+    }).sort({ createdAt: -1 }).limit(100).lean() as any[];
+
+    const documents = slips.map((s: any) => ({
+      id: s.slipId || s._id,
+      title: `${s.employee?.name || 'Unknown'} Employee Document.pdf`,
+      folder: 'Finance',
+      size: 'Unknown',
+      uploadedBy: s.employee?.name || 'System',
+      date: s.signedAt || s.createdAt,
+      url: s.pdfUrl || s.gcsUrl || '',
+      publicId: s.pdfPublicId || '',
+    }));
+
+    res.json({ success: true, documents });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -136,17 +192,32 @@ router.post('/:id/sign', async (req: Request, res: Response) => {
     // generate signed PDF and upload
     if (generateSalarySlipPDF) {
       try {
+        console.log(`Generating signed PDF for slip ${slip._id}...`);
         const pdfPath = await generateSalarySlipPDF(slip, { includeSignature: true });
         slip.pdfPath = pdfPath;
-        if (uploadToGCS) {
+        console.log(`PDF generated at: ${pdfPath}`);
+
+        if (uploadToCloudinary) {
+          console.log(`Uploading PDF to Cloudinary...`);
           const destName = `finance/salary_slip_${slip.slipId || slip._id}_signed.pdf`;
-          const { gcsUrl, gcsFileName } = await uploadToGCS(pdfPath, destName);
-          slip.gcsUrl = gcsUrl;
-          slip.gcsFileName = gcsFileName;
+          const cloudinaryData = await uploadToCloudinary(pdfPath, destName);
+          console.log(`Cloudinary upload success: ${cloudinaryData.cloudinaryUrl}`);
+          
+          slip.pdfUrl = cloudinaryData.cloudinaryUrl;
+          slip.pdfPublicId = cloudinaryData.publicId;
+          slip.pdfAssetId = cloudinaryData.assetId;
+          slip.pdfFormat = cloudinaryData.format;
+          slip.pdfFolder = cloudinaryData.folder;
+          slip.pdfFileName = cloudinaryData.fileName;
+          slip.storageProvider = 'cloudinary';
+        } else {
+          console.warn('Cloudinary service not available, skipping upload.');
         }
       } catch (e: any) {
-        console.error('PDF/GCS signed generation failed', e.message || e);
+        console.error('PDF/Cloudinary signed generation/upload failed:', e.message || e);
       }
+    } else {
+      console.warn('PDF Service not available, skipping signed PDF generation.');
     }
 
     await slip.save();

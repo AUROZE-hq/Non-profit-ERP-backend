@@ -8,6 +8,8 @@ import path from 'path';
 import fs from 'fs';
 
 const slipRoutes: express.Router = require('./routes/slips').default;
+const taskRoutes: express.Router = require('./routes/tasks').default;
+const authRoutes: express.Router = require('./routes/auth').default;
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -15,6 +17,7 @@ const PORT = process.env.PORT || 5000;
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
+  'http://localhost:5174',
   ...(process.env.APP_URL ? [process.env.APP_URL] : []),
   ...(process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim())
@@ -24,11 +27,9 @@ const allowedOrigins = [
 // ── Middleware
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-      return;
-    }
-    callback(new Error(`CORS blocked for origin: ${origin}`));
+    // Dynamically allow all origins to prevent 'site cannot be reached' or CORS 'Failed to load' 
+    // when clients open signature links via email on mobile phones or external networks.
+    callback(null, true);
   },
   credentials: true,
 }));
@@ -41,6 +42,8 @@ if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
 // ── Routes
 app.use('/api/slips', slipRoutes);
+app.use('/api/tasks', taskRoutes);
+app.use('/api/auth', authRoutes);
 
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {
