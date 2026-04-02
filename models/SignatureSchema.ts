@@ -66,6 +66,14 @@ export interface ISalarySlip extends Document {
   gcsUrl?: string;
   gcsFileName?: string;
 
+  pdfUrl?: string;
+  pdfPublicId?: string;
+  pdfAssetId?: string;
+  pdfFormat?: string;
+  pdfFolder?: string;
+  pdfFileName?: string;
+  storageProvider?: string;
+
   createdBy?: Types.ObjectId;
 
   createdAt?: Date;
@@ -133,6 +141,14 @@ const salarySlipSchema = new Schema<ISalarySlip>(
     pdfPath: String,
     gcsUrl: String,
     gcsFileName: String,
+
+    pdfUrl: String,
+    pdfPublicId: String,
+    pdfAssetId: String,
+    pdfFormat: String,
+    pdfFolder: String,
+    pdfFileName: String,
+    storageProvider: String,
 
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },
