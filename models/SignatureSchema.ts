@@ -21,6 +21,9 @@ export interface ISalarySlip extends Document {
 
   employee: {
     ref?: Types.ObjectId;
+    firstName?: string;
+    lastName?: string;
+    middleName?: string;
     name?: string;
     email?: string;
     department?: string;
@@ -89,6 +92,9 @@ const salarySlipSchema = new Schema<ISalarySlip>(
 
     employee: {
       ref: { type: Schema.Types.ObjectId, ref: 'Employee' },
+      firstName: String,
+      lastName: String,
+      middleName: String,
       name: String,
       email: String,
       department: String,
