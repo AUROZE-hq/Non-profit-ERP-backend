@@ -10,6 +10,7 @@ import fs from 'fs';
 const slipRoutes: express.Router = require('./routes/slips').default;
 const taskRoutes: express.Router = require('./routes/tasks').default;
 const authRoutes: express.Router = require('./routes/auth').default;
+const userRoutes: express.Router = require('./routes/user').default;
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -60,6 +61,7 @@ if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 app.use('/api/slips', slipRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {
