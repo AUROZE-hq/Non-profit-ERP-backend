@@ -1,7 +1,7 @@
 // services/emailService.js  –  sends emails via nodemailer (Gmail SMTP)
 
 const nodemailer = require('nodemailer');
-
+const fs = require("fs");
 const COMPANY_NAME = process.env.COMPANY_NAME || 'Your Company';
 const COMPANY_EMAIL = process.env.COMPANY_EMAIL || 'company@example.com';
 const APP_URL = process.env.APP_URL || 'http://localhost:5173';
@@ -19,6 +19,18 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
+  requireTLS: true,
+  tls: {
+    rejectUnauthorized: false, // IMPORTANT for Railway
+  },
+});
+
+transporter.verify((error: Error | null, success: boolean) => {
+  if (error) {
+    console.error("❌ SMTP ERROR:", error);
+  } else {
+    console.log("✅ SMTP CONNECTED");
+  }
 });
 
 // Log SMTP readiness without blocking startup.
@@ -274,13 +286,22 @@ async function sendSalarySlipEmail({ employee, slip, pdfPath }: any) {
 </html>
 `;
 
-  await transporter.sendMail({
+try {
+  const info = await transporter.sendMail({
     from: `"${COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
     to: employee.email,
     subject: `Your Salary Slip – ${period} | ${COMPANY_NAME}`,
     html,
-    attachments: pdfPath ? [{ filename: `Salary_Slip_${period}.pdf`, path: pdfPath }] : [],
-  });
+attachments:
+  pdfPath && fs.existsSync(pdfPath)
+    ? [{ filename: `Salary_Slip_${period}.pdf`, path: pdfPath }]
+    : [],  });
+
+  console.log("✅ Email sent:", info.response);
+
+} catch (error) {
+  console.error("❌ Email failed:", error);
+}
 }
 
 /**
