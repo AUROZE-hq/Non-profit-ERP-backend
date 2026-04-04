@@ -13,6 +13,8 @@ export type SalarySlipStatus =
 
 export type DeliveryChannel = 'email' | 'whatsapp';
 
+export type EmailDeliveryStatus = 'not_requested' | 'queued' | 'sent' | 'failed';
+
 /**
  * Interface
  */
@@ -56,6 +58,11 @@ export interface ISalarySlip extends Document {
   status: SalarySlipStatus;
 
   deliveryChannel?: DeliveryChannel;
+  emailStatus?: EmailDeliveryStatus;
+  emailError?: string;
+  emailQueuedAt?: Date;
+  emailSentAt?: Date;
+  emailFailedAt?: Date;
 
   sentAt?: Date;
   viewedAt?: Date;
@@ -135,6 +142,16 @@ const salarySlipSchema = new Schema<ISalarySlip>(
       enum: ['email', 'whatsapp'],
       default: 'email',
     },
+
+    emailStatus: {
+      type: String,
+      enum: ['not_requested', 'queued', 'sent', 'failed'],
+      default: 'not_requested',
+    },
+    emailError: String,
+    emailQueuedAt: Date,
+    emailSentAt: Date,
+    emailFailedAt: Date,
 
     sentAt: Date,
     viewedAt: Date,

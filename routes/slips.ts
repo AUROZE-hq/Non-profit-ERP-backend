@@ -32,12 +32,76 @@ try {
 import { SalarySlip } from '../models/SignatureSchema';
 
 const router = express.Router();
+const APP_URL = process.env.APP_URL || 'http://localhost:5173';
+const MAX_EMAIL_ERROR_LENGTH = 500;
+
+function toSafeEmailErrorMessage(error: any) {
+  const raw = error?.message || error?.response || error?.code || String(error || 'Unknown email error');
+  const normalized = String(raw).replace(/\s+/g, ' ').trim();
+  return normalized.slice(0, MAX_EMAIL_ERROR_LENGTH);
+}
+
+async function dispatchSlipEmailInBackground(slipId: string) {
+  try {
+    const slip: any = await SalarySlip.findById(slipId);
+    if (!slip) {
+      console.warn(`[slips] Background email dispatch skipped; slip not found: ${slipId}`);
+      return;
+    }
+
+    slip.emailStatus = 'queued';
+    slip.emailQueuedAt = new Date();
+    slip.emailFailedAt = undefined;
+    slip.emailError = undefined;
+    slip.lastActivityAt = new Date();
+    await slip.save();
+
+    if (!emailService || typeof emailService.sendSalarySlipEmail !== 'function') {
+      throw new Error('Email service is unavailable.');
+    }
+
+    await emailService.sendSalarySlipEmail({ employee: slip.employee, slip, pdfPath: slip.pdfPath });
+
+    slip.emailStatus = 'sent';
+    slip.emailSentAt = new Date();
+    slip.emailFailedAt = undefined;
+    slip.emailError = undefined;
+    slip.sentAt = new Date();
+
+    // Keep signing flow truthful; only mark sent where the existing business state allows.
+    if (slip.status === 'draft') {
+      slip.status = 'sent';
+    }
+
+    slip.lastActivityAt = new Date();
+    await slip.save();
+  } catch (error: any) {
+    const safeError = toSafeEmailErrorMessage(error);
+    console.error(`[slips] Background email dispatch failed for slip ${slipId}:`, safeError);
+
+    try {
+      const slip: any = await SalarySlip.findById(slipId);
+      if (!slip) {
+        return;
+      }
+
+      slip.emailStatus = 'failed';
+      slip.emailFailedAt = new Date();
+      slip.emailError = safeError;
+      slip.lastActivityAt = new Date();
+      await slip.save();
+    } catch (persistError: any) {
+      console.error(`[slips] Failed to persist email failure state for slip ${slipId}:`, persistError?.message || persistError);
+    }
+  }
+}
 
 // Create a salary slip and optionally send email
 router.post('/', async (req: Request, res: Response) => {
   try {
     const body: any = req.body || {};
     const channel = body.channel === 'whatsapp' ? 'whatsapp' : 'email';
+    const shouldDispatchEmail = channel === 'email' && Boolean(body.sendEmail);
     const now = new Date();
     const slipData: any = {
       employee: body.employee || {},
@@ -48,6 +112,8 @@ router.post('/', async (req: Request, res: Response) => {
       notes: body.notes || '',
       status: body.sendEmail ? 'pending_signature' : (body.status || 'draft'),
       deliveryChannel: channel,
+      emailStatus: shouldDispatchEmail ? 'queued' : 'not_requested',
+      emailQueuedAt: shouldDispatchEmail ? now : undefined,
       lastActivityAt: now,
       signatureToken: uuidv4(),
     };
@@ -86,19 +152,6 @@ router.post('/', async (req: Request, res: Response) => {
       }
     }
 
-    // send email if requested and service present
-    if (body.sendEmail && emailService && emailService.sendSalarySlipEmail) {
-      try {
-        await emailService.sendSalarySlipEmail({ employee: slip.employee, slip, pdfPath: slip.pdfPath });
-        slip.sentAt = new Date();
-        slip.status = 'sent';
-        slip.lastActivityAt = new Date();
-        await slip.save();
-      } catch (e: any) {
-        console.error('Email send failed', e.message || e);
-      }
-    }
-
     if (channel === 'whatsapp') {
       slip.sentAt = slip.sentAt || now;
       slip.status = slip.status === 'draft' ? 'pending_signature' : slip.status;
@@ -106,7 +159,21 @@ router.post('/', async (req: Request, res: Response) => {
       await slip.save();
     }
 
-    res.json({ success: true, slip });
+    const signUrl = `${APP_URL}/sign/${slip.signatureToken}`;
+    const emailDispatch = shouldDispatchEmail ? 'queued' : 'not_requested';
+
+    res.json({
+      success: true,
+      slip,
+      signatureToken: slip.signatureToken,
+      signUrl,
+      emailDispatch,
+    });
+
+    if (shouldDispatchEmail) {
+      // Fire-and-forget async dispatch so SMTP delays never block response time.
+      void dispatchSlipEmailInBackground(String(slip._id));
+    }
   } catch (err: any) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message || 'Failed to create slip' });
