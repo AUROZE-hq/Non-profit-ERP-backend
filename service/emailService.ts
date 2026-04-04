@@ -12,16 +12,35 @@ const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.EMAIL_PORT || '587'),
   secure: false,
+  connectionTimeout: parseInt(process.env.EMAIL_CONNECTION_TIMEOUT_MS || '10000'),
+  greetingTimeout: parseInt(process.env.EMAIL_GREETING_TIMEOUT_MS || '10000'),
+  socketTimeout: parseInt(process.env.EMAIL_SOCKET_TIMEOUT_MS || '20000'),
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
 });
 
+// Log SMTP readiness without blocking startup.
+transporter.verify((error: any, success: any) => {
+  if (error) {
+    console.warn('[emailService] SMTP verify failed:', error.message || error);
+    return;
+  }
+
+  if (success) {
+    console.log('[emailService] SMTP transporter is ready');
+  }
+});
+
 /**
  * Send salary slip to employee with a signing link.
  */
 async function sendSalarySlipEmail({ employee, slip, pdfPath }: any) {
+  if (!employee?.email) {
+    throw new Error('Employee email is missing; cannot send salary slip email.');
+  }
+
   const signUrl = `${APP_URL}/sign/${slip.signatureToken}`;
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const period = `${MONTHS[(slip.period.month || 1) - 1]} ${slip.period.year}`;
