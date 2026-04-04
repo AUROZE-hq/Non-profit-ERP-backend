@@ -235,22 +235,22 @@ async function sendSalarySlipEmail({ employee, slip, pdfPath }: any) {
 
         <div class="row">
           <span class="label">Basic Salary</span>
-          <span class="value">LKR ${fmt(slip.earnings.basicSalary)}</span>
+          <span class="value">CAD ${fmtCad(slip.earnings.basicSalary)}</span>
         </div>
 
         <div class="row">
           <span class="label">Allowances</span>
-          <span class="value">LKR ${fmt(slip.earnings.allowances)}</span>
+          <span class="value">CAD ${fmtCad(slip.earnings.allowances)}</span>
         </div>
 
         <div class="row">
           <span class="label">Bonus</span>
-          <span class="value">LKR ${fmt(slip.earnings.bonus)}</span>
+          <span class="value">CAD ${fmtCad(slip.earnings.bonus)}</span>
         </div>
 
         <div class="row">
           <span class="label">Deductions</span>
-          <span class="value">- LKR ${fmt(
+          <span class="value">- CAD ${fmtCad(
     (slip.deductions.tax || 0) +
     (slip.deductions.insurance || 0) +
     (slip.deductions.other || 0)
@@ -259,7 +259,7 @@ async function sendSalarySlipEmail({ employee, slip, pdfPath }: any) {
 
         <div class="net">
           <span class="label">Net Salary</span>
-          <span class="value">LKR ${fmt(slip.netSalary)}</span>
+          <span class="value">CAD ${fmtCad(slip.netSalary)}</span>
         </div>
 
       </div>
@@ -337,7 +337,7 @@ async function sendSignatureConfirmationEmail({ slip, ownerEmail }: any) {
          for the period <strong>${period}</strong> has been digitally signed.</p>
       <div class="highlight">
         <strong>Signed at:</strong> ${new Date(slip.signedAt).toLocaleString()}<br>
-        <strong>Net Salary:</strong> LKR ${fmt(slip.netSalary)}<br>
+        <strong>Net Salary:</strong> CAD ${fmtCad(slip.netSalary)}<br>
         ${slip.gcsUrl ? `<strong>Stored at:</strong> <a href="${slip.gcsUrl}">Google Cloud Storage</a>` : ''}
       </div>
       <p>The dashboard status has been updated to <strong>Completed</strong>.
@@ -405,8 +405,8 @@ async function sendForgotPasswordEmail({ email, name, resetUrl }: any) {
   });
 }
 
-function fmt(n: any) {
-  return Number(n || 0).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function fmtCad(n: any) {
+  return Number(n || 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 module.exports = { sendSalarySlipEmail, sendSignatureConfirmationEmail, sendForgotPasswordEmail };
