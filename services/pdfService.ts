@@ -2,6 +2,13 @@ const PDFDocument = require('pdfkit');
 import fs from 'fs';
 import path from 'path';
 
+function formatCadAmount(value: number) {
+  return `CAD ${Number(value || 0).toLocaleString('en-CA', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 /**
  * Generate a Salary Slip PDF
  * @param slip The salary slip document from Mongoose
@@ -44,24 +51,24 @@ export async function generateSalarySlipPDF(slip: any, options: { includeSignatu
       doc.fontSize(14).text('Earnings', { underline: true });
       doc.fontSize(11);
       const earnings = slip.earnings || {};
-      doc.text(`Basic Salary: LKR ${(earnings.basicSalary || 0).toLocaleString()}`);
-      doc.text(`Allowances: LKR ${(earnings.allowances || 0).toLocaleString()}`);
-      doc.text(`Bonus: LKR ${(earnings.bonus || 0).toLocaleString()}`);
-      doc.text(`Overtime: LKR ${(earnings.overtime || 0).toLocaleString()}`);
+      doc.text(`Basic Salary: ${formatCadAmount(earnings.basicSalary || 0)}`);
+      doc.text(`Allowances: ${formatCadAmount(earnings.allowances || 0)}`);
+      doc.text(`Bonus: ${formatCadAmount(earnings.bonus || 0)}`);
+      doc.text(`Overtime: ${formatCadAmount(earnings.overtime || 0)}`);
       doc.moveDown();
 
       // --- Deductions Table ---
       doc.fontSize(14).text('Deductions', { underline: true });
       doc.fontSize(11);
       const deductions = slip.deductions || {};
-      doc.text(`Tax: LKR ${(deductions.tax || 0).toLocaleString()}`);
-      doc.text(`Insurance: LKR ${(deductions.insurance || 0).toLocaleString()}`);
-      doc.text(`Other: LKR ${(deductions.other || 0).toLocaleString()}`);
+      doc.text(`Tax: ${formatCadAmount(deductions.tax || 0)}`);
+      doc.text(`Insurance: ${formatCadAmount(deductions.insurance || 0)}`);
+      doc.text(`Other: ${formatCadAmount(deductions.other || 0)}`);
       doc.moveDown();
 
       // --- Net Salary ---
       doc.fontSize(14).rect(50, doc.y, 400, 30).stroke();
-      doc.text(`NET SALARY: LKR ${(slip.netSalary || 0).toLocaleString()}`, 60, doc.y + 10);
+      doc.text(`NET SALARY: ${formatCadAmount(slip.netSalary || 0)}`, 60, doc.y + 10);
       doc.moveDown(2);
 
       // --- Signature ---
