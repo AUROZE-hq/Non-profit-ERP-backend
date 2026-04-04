@@ -15,22 +15,38 @@ const userRoutes: express.Router = require('./routes/user').default;
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://localhost:5174',
-  ...(process.env.APP_URL ? [process.env.APP_URL] : []),
-  ...(process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim())
-    : []),
-].filter(Boolean);
+// Determine the single allowed origin from APP_URL (normalized to an origin).
+// When APP_URL is not set, allow localhost origins for development.
+let allowedOrigin = '';
+if (process.env.APP_URL) {
+  const raw = process.env.APP_URL.trim();
+  try {
+    allowedOrigin = new URL(raw).origin;
+  } catch (_err) {
+    allowedOrigin = raw; // fallback to raw value if it isn't a full URL
+  }
+}
 
 // ── Middleware
 app.use(cors({
   origin: (origin, callback) => {
-    // Dynamically allow all origins to prevent 'site cannot be reached' or CORS 'Failed to load' 
-    // when clients open signature links via email on mobile phones or external networks.
-    callback(null, true);
+    // Allow requests without an origin (e.g., curl, server-to-server).
+    if (!origin) return callback(null, true);
+
+    // If APP_URL is set, require an exact origin match.
+    if (allowedOrigin) {
+      if (origin === allowedOrigin) return callback(null, true);
+      // Reject by not providing CORS headers (callback with false) instead of throwing.
+      console.warn(`CORS: rejecting origin ${origin}; expected ${allowedOrigin}`);
+      return callback(null, false);
+    }
+
+    // APP_URL not set: allow common local dev origins.
+    if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
+
+    // Otherwise disallow silently.
+    console.warn(`CORS: rejecting origin ${origin}; no APP_URL configured`);
+    return callback(null, false);
   },
   credentials: true,
 }));
