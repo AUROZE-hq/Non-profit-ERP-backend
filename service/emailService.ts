@@ -206,7 +206,7 @@ async function sendSalarySlipEmail({ employee, slip, pdfPath }: any) {
 
     <div class="header">
       <h1>${COMPANY_NAME}</h1>
-      <p>Salary Slip — ${period}</p>
+      <p>Acknowledgment of Honorarium — ${period}</p>
     </div>
 
     <div class="body">
@@ -214,7 +214,7 @@ async function sendSalarySlipEmail({ employee, slip, pdfPath }: any) {
       <p class="greeting">Dear ${employee.name},</p>
 
       <p class="message">
-        Your salary slip for <strong>${period}</strong> has been prepared.
+        Your Acknowledgment of Honorarium Payment for <strong>${period}</strong> has been prepared.
         Please review the details below and click the button to sign digitally.
         Once signed, a copy will be securely stored in our records.
       </p>
@@ -258,14 +258,14 @@ async function sendSalarySlipEmail({ employee, slip, pdfPath }: any) {
         </div>
 
         <div class="net">
-          <span class="label">Net Salary</span>
+          <span class="label">Honorarium Payment</span>
           <span class="value">CAD ${fmtCad(slip.netSalary)}</span>
         </div>
 
       </div>
 
       <div class="cta">
-        <a href="${signUrl}" class="btn">✍️ Sign My Salary Slip</a>
+        <a href="${signUrl}" class="btn">✍️ Sign My Honorarium Slip</a>
       </div>
 
       <p class="note">
@@ -290,11 +290,11 @@ try {
   const info = await transporter.sendMail({
     from: `"${COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
     to: employee.email,
-    subject: `Your Salary Slip – ${period} | ${COMPANY_NAME}`,
+    subject: `Your Honorarium Slip – ${period} | ${COMPANY_NAME}`,
     html,
 attachments:
   pdfPath && fs.existsSync(pdfPath)
-    ? [{ filename: `Salary_Slip_${period}.pdf`, path: pdfPath }]
+    ? [{ filename: `Honorarium_Slip_${period}.pdf`, path: pdfPath }]
     : [],  });
 
   console.log("✅ Email sent:", info.response);
@@ -329,15 +329,15 @@ async function sendSignatureConfirmationEmail({ slip, ownerEmail }: any) {
 <body>
   <div class="container">
     <div class="header">
-      <h1>✅ Salary Slip Signed</h1>
+      <h1>✅ Honorarium Slip Signed</h1>
       <p>${slip.employee.name} · ${period}</p>
     </div>
     <div class="body">
-      <p>The salary slip for <strong>${slip.employee.name}</strong> (${slip.employee.employeeId})
+      <p>The honorarium slip for <strong>${slip.employee.name}</strong> (${slip.employee.employeeId})
          for the period <strong>${period}</strong> has been digitally signed.</p>
       <div class="highlight">
         <strong>Signed at:</strong> ${new Date(slip.signedAt).toLocaleString()}<br>
-        <strong>Net Salary:</strong> CAD ${fmtCad(slip.netSalary)}<br>
+        <strong>Honorarium Payment:</strong> CAD ${fmtCad(slip.netSalary)}<br>
         ${slip.gcsUrl ? `<strong>Stored at:</strong> <a href="${slip.gcsUrl}">Google Cloud Storage</a>` : ''}
       </div>
       <p>The dashboard status has been updated to <strong>Completed</strong>.
@@ -351,7 +351,7 @@ async function sendSignatureConfirmationEmail({ slip, ownerEmail }: any) {
   await transporter.sendMail({
     from: `"${COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
     to: ownerEmail,
-    subject: `✅ Signed: ${slip.employee.name}'s Salary Slip – ${period}`,
+    subject: `✅ Signed: ${slip.employee.name}'s Honorarium Slip – ${period}`,
     html,
   });
 }
