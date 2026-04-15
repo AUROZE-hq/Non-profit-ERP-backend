@@ -1,10 +1,11 @@
 import express, { Request, Response } from 'express';
 import { userService } from '../service/userService';
+import { protect, authorize } from '../middleware/authMiddleware';
 
 const router = express.Router();
 
 // Get all users from database
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', protect, authorize('admin', 'manager'), async (req: Request, res: Response) => {
 	try {
 		const users = await userService.getAllUsers();
 		res.json({ success: true, users });

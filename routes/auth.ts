@@ -19,6 +19,9 @@ router.post('/login', async (req: Request, res: Response) => {
 
 // Register route
 router.post('/register', async (req: Request, res: Response) => {
+  if (process.env.ALLOW_PUBLIC_REGISTRATION !== 'true') {
+    return res.status(403).json({ success: false, message: 'Public registration is disabled' });
+  }
   try {
     const { name, email, password, role } = req.body;
     const { user, token } = await authService.register({ name, email, password, role });

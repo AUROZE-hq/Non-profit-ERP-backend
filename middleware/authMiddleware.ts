@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { User } from '../models/User';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_fallback_secret';
+const JWT_SECRET = process.env.JWT_SECRET as string;
 
 export const protect = async (req: Request, res: Response, next: NextFunction) => {
   let token;

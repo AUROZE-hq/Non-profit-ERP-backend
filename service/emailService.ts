@@ -2,9 +2,9 @@
 
 const nodemailer = require('nodemailer');
 const fs = require("fs");
+const { buildPublicSignUrl } = require('../utils/publicUrl');
 const COMPANY_NAME = process.env.COMPANY_NAME || 'Your Company';
 const COMPANY_EMAIL = process.env.COMPANY_EMAIL || 'company@example.com';
-const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:5000';
 
 // ── Transporter ───────────────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ const transporter = nodemailer.createTransport({
   },
   requireTLS: true,
   tls: {
-    rejectUnauthorized: false, // IMPORTANT for Railway
+    rejectUnauthorized: process.env.EMAIL_ALLOW_INSECURE === 'true' ? false : true,
   },
 });
 
@@ -53,7 +53,7 @@ async function sendSalarySlipEmail({ employee, slip, pdfPath }: any) {
     throw new Error('Employee email is missing; cannot send salary slip email.');
   }
 
-  const signUrl = `${APP_URL}/sign/${slip.signatureToken}`;
+  const signUrl = buildPublicSignUrl(String(slip.signatureToken));
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const period = `${MONTHS[(slip.period.month || 1) - 1]} ${slip.period.year}`;
 

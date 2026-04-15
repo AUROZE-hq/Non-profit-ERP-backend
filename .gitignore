@@ -30,9 +30,15 @@ build/
 backend/temp/
 backend/gcs-service-account.json
 
+# Excluded explicitly
+.git
+
+
 # Optional: coverage
 coverage/
 
 # Optional: uploads / temp files
 uploads/
 temp/
+*.pdf
+seed*.ts

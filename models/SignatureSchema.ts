@@ -71,6 +71,8 @@ export interface ISalarySlip extends Document {
 
   signatureData?: string;
   signatureToken?: string;
+  signatureTokenExpiresAt?: Date;
+  signatureTokenUsed?: boolean;
 
   pdfPath?: string;
   gcsUrl?: string;
@@ -160,6 +162,8 @@ const salarySlipSchema = new Schema<ISalarySlip>(
 
     signatureData: String,
     signatureToken: String,
+    signatureTokenExpiresAt: { type: Date, default: () => new Date(Date.now() + 48 * 60 * 60 * 1000) }, // 48 hours from creation
+    signatureTokenUsed: { type: Boolean, default: false },
 
     pdfPath: String,
     gcsUrl: String,

@@ -1,10 +1,11 @@
 import express, { Request, Response } from 'express';
 import { taskService } from '../service/taskService';
+import { protect, authorize } from '../middleware/authMiddleware';
 
 const router = express.Router();
 
 // Get all tasks
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', protect, async (req: Request, res: Response) => {
   try {
     const tasks = await taskService.getAllTasks();
     res.json({ success: true, tasks });
@@ -14,7 +15,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // Get a single task by ID
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', protect, async (req: Request, res: Response) => {
   try {
     const task = await taskService.getTaskById(req.params.id);
     if (!task) {
@@ -27,7 +28,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // Create a new task
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', protect, authorize('admin', 'manager'), async (req: Request, res: Response) => {
   try {
     const task = await taskService.createTask(req.body);
     res.status(201).json({ success: true, task });
@@ -37,7 +38,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // Update a task
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', protect, authorize('admin', 'manager'), async (req: Request, res: Response) => {
   try {
     const task = await taskService.updateTask(req.params.id, req.body);
     if (!task) {
@@ -50,7 +51,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // Delete a task
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', protect, authorize('admin', 'manager'), async (req: Request, res: Response) => {
   try {
     const task = await taskService.deleteTask(req.params.id);
     if (!task) {

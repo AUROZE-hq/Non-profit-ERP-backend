@@ -6,6 +6,7 @@ import cors from 'cors';
 import mongoose from 'mongoose';
 import path from 'path';
 import fs from 'fs';
+import { normalizePublicAppUrl } from './utils/publicUrl';
 
 const slipRoutes: express.Router = require('./routes/slips').default;
 const taskRoutes: express.Router = require('./routes/tasks').default;
@@ -15,16 +16,14 @@ const userRoutes: express.Router = require('./routes/user').default;
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Determine the single allowed origin from APP_URL (normalized to an origin).
-// When APP_URL is not set, allow localhost origins for development.
+// Determine the single allowed origin from FRONTEND_APP_URL.
+// When not set, default to localhost frontend origin.
 let allowedOrigin = '';
-if (process.env.APP_URL) {
-  const raw = process.env.APP_URL.trim();
-  try {
-    allowedOrigin = new URL(raw).origin;
-  } catch (_err) {
-    allowedOrigin = raw; // fallback to raw value if it isn't a full URL
-  }
+try {
+  allowedOrigin = new URL(normalizePublicAppUrl(process.env.FRONTEND_APP_URL)).origin;
+} catch (error: any) {
+  console.warn(`CORS: invalid FRONTEND_APP_URL configuration: ${error?.message || error}`);
+  allowedOrigin = 'http://localhost:5176';
 }
 
 // ── Middleware
@@ -33,7 +32,7 @@ app.use(cors({
     // Allow requests without an origin (e.g., curl, server-to-server).
     if (!origin) return callback(null, true);
 
-    // If APP_URL is set, require an exact origin match.
+    // Require exact frontend origin match.
     if (allowedOrigin) {
       if (origin === allowedOrigin) return callback(null, true);
       // Reject by not providing CORS headers (callback with false) instead of throwing.
@@ -41,11 +40,11 @@ app.use(cors({
       return callback(null, false);
     }
 
-    // APP_URL not set: allow common local dev origins.
+    // Fallback: allow common local dev origins.
     if (/^https?:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
 
     // Otherwise disallow silently.
-    console.warn(`CORS: rejecting origin ${origin}; no APP_URL configured`);
+    console.warn(`CORS: rejecting origin ${origin}; no valid FRONTEND_APP_URL configured`);
     return callback(null, false);
   },
   credentials: true,
@@ -76,9 +75,15 @@ app.use((req: Request, res: Response) => {
 // Global error handler
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   console.error('Global error:', err);
-  res.status(500).json({ success: false, message: err.message || 'Internal server error' });
+  res.status(500).json({ success: false, message: 'Internal server error' });
 });
 
+
+// Validate JWT_SECRET
+if (!process.env.JWT_SECRET) {
+  console.error('❌ JWT_SECRET environment variable is missing.');
+  process.exit(1);
+}
 
 // Validate MONGODB_URI before attempting connection
 const rawMongoUri = process.env.MONGODB_URI || '';
@@ -97,8 +102,6 @@ mongoose
     console.log('✅ MongoDB connected');
     app.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
-      console.log(`📧 Email: ${process.env.EMAIL_USER}`);
-      console.log(`☁️  GCS Bucket: ${process.env.GCS_BUCKET_NAME}`);
     });
   })
   .catch((err: any) => {
