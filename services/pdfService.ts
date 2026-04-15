@@ -89,7 +89,7 @@ export async function generateSalarySlipPDF(slip: any, options: { includeSignatu
       doc.moveDown(2);
 
       // --- Title and subtitle ---
-      doc.font('Helvetica-Bold').fontSize(18).text('LoveCry Wellness Series: Love is not a sin', { align: 'center' });
+      doc.font('Helvetica').fontSize(14).text('LoveCry Wellness Series: Love is not a sin', { align: 'center' });
       doc.moveDown(0.5);
       doc.font('Helvetica-Bold').fontSize(15).text('Acknowledgment of Honorarium Payment', { align: 'center' });
       doc.moveDown(2);
@@ -121,11 +121,11 @@ export async function generateSalarySlipPDF(slip: any, options: { includeSignatu
         doc.text(`Signed At: ${slip.signedAt ? new Date(slip.signedAt).toLocaleString() : new Date().toLocaleString()}`);
       } else {
         doc.font('Helvetica').fontSize(12).text('Signature:');
-        doc.moveDown(1.2);
+        doc.moveDown(2.2);
         const lineY = doc.y;
         doc.moveTo(50, lineY).lineTo(280, lineY).stroke();
         doc.moveDown(1.2);
-        doc.text('Date:');
+        doc.text('Signed At:');
       }
 
       doc.end();
