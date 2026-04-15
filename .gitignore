@@ -38,5 +38,3 @@ backend/gcs-service-account.json
 coverage/
 
 # Optional: uploads / temp files
-uploads/
-temp/
