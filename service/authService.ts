@@ -5,7 +5,7 @@ const requireAny: any = require;
 let emailService: any = null;
 try { emailService = requireAny('../service/emailService'); } catch (_) { /* noop */ }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_fallback_secret';
+const JWT_SECRET = process.env.JWT_SECRET as string;
 const JWT_EXPIRES_IN = '7d';
 
 export const authService = {

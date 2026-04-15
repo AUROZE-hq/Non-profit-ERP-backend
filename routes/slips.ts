@@ -2,6 +2,8 @@ import express, { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
+import { protect, authorize } from '../middleware/authMiddleware';
+import { buildPublicSignUrl } from '../utils/publicUrl';
 
 // allow safe require for optional JS services
 const requireAny: any = require;
@@ -32,7 +34,6 @@ try {
 import { SalarySlip } from '../models/SignatureSchema';
 
 const router = express.Router();
-const APP_URL = process.env.APP_URL || 'http://localhost:5173';
 const MAX_EMAIL_ERROR_LENGTH = 500;
 
 function toSafeEmailErrorMessage(error: any) {
@@ -96,13 +97,17 @@ async function dispatchSlipEmailInBackground(slipId: string) {
   }
 }
 
-// Create a salary slip and optionally send email
-router.post('/', async (req: Request, res: Response) => {
+// Create a salary slip and optionally send email (PROTECTED - admin/manager only)
+router.post('/', protect, authorize('admin', 'manager'), async (req: Request, res: Response) => {
   try {
     const body: any = req.body || {};
     const channel = body.channel === 'whatsapp' ? 'whatsapp' : 'email';
     const shouldDispatchEmail = channel === 'email' && Boolean(body.sendEmail);
     const now = new Date();
+    
+    // Generate expiry: 48 hours from now
+    const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    
     const slipData: any = {
       employee: body.employee || {},
       period: body.period || { month: 1, year: new Date().getFullYear() },
@@ -116,6 +121,8 @@ router.post('/', async (req: Request, res: Response) => {
       emailQueuedAt: shouldDispatchEmail ? now : undefined,
       lastActivityAt: now,
       signatureToken: uuidv4(),
+      signatureTokenExpiresAt: expiresAt,
+      signatureTokenUsed: false,
     };
 
     const slip = new SalarySlip(slipData);
@@ -159,7 +166,7 @@ router.post('/', async (req: Request, res: Response) => {
       await slip.save();
     }
 
-    const signUrl = `${APP_URL}/sign/${slip.signatureToken}`;
+    const signUrl = buildPublicSignUrl(String(slip.signatureToken));
     const emailDispatch = shouldDispatchEmail ? 'queued' : 'not_requested';
 
     res.json({
@@ -181,7 +188,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // Get finance documents for frontend
-router.get('/documents', async (req: Request, res: Response) => {
+router.get('/documents', protect, async (req: Request, res: Response) => {
   try {
     const slips = await SalarySlip.find({
       $or: [
@@ -210,7 +217,7 @@ router.get('/documents', async (req: Request, res: Response) => {
 });
 
 // List slips (basic)
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', protect, async (req: Request, res: Response) => {
   try {
     const slips = await SalarySlip.find().sort({ createdAt: -1 }).limit(200).lean();
     res.json({ success: true, slips });
@@ -219,13 +226,30 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// Get slip by signature token
+// Get slip by signature token (PUBLIC - no auth required)
 router.get('/token/:token', async (req: Request, res: Response) => {
   try {
     const token = req.params.token;
-    const slip: any = await SalarySlip.findOne({ signatureToken: token });
-    if (!slip) return res.status(404).json({ success: false, message: 'Slip not found' });
+    if (!token) {
+      return res.status(400).json({ success: false, message: 'Token is required' });
+    }
 
+    const slip: any = await SalarySlip.findOne({ signatureToken: token });
+    if (!slip) {
+      return res.status(404).json({ success: false, message: 'Slip not found or invalid link' });
+    }
+
+    // Security: Check if token is expired
+    if (slip.signatureTokenExpiresAt && new Date() > new Date(slip.signatureTokenExpiresAt)) {
+      return res.status(410).json({ success: false, message: 'This signature link has expired. Please contact your administrator.' });
+    }
+
+    // Security: Check if already signed/used
+    if (slip.signedAt || slip.status === 'completed' || slip.status === 'signed') {
+      return res.status(400).json({ success: false, message: 'This slip has already been signed. You cannot sign it again.' });
+    }
+
+    // Track view activity
     if (!slip.viewedAt) {
       slip.viewedAt = new Date();
     }
@@ -235,21 +259,69 @@ router.get('/token/:token', async (req: Request, res: Response) => {
     slip.lastActivityAt = new Date();
     await slip.save();
 
-    res.json({ success: true, slip });
+    // Return only minimal safe data - no internal fields
+    const safeSlip = {
+      _id: slip._id,
+      slipId: slip.slipId,
+      employee: {
+        name: slip.employee?.name || 'Employee',
+        email: slip.employee?.email,
+      },
+      period: slip.period,
+      netSalary: slip.netSalary,
+      earnings: {
+        basicSalary: slip.earnings?.basicSalary || 0,
+        allowances: slip.earnings?.allowances || 0,
+        bonus: slip.earnings?.bonus || 0,
+        overtime: slip.earnings?.overtime || 0,
+      },
+      deductions: {
+        tax: slip.deductions?.tax || 0,
+        insurance: slip.deductions?.insurance || 0,
+        other: slip.deductions?.other || 0,
+      },
+      status: slip.status,
+      signedAt: slip.signedAt || null,
+    };
+
+    res.json({ success: true, slip: safeSlip });
   } catch (err: any) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('[PUBLIC SIGNING] Get slip error:', err.message);
+    res.status(500).json({ success: false, message: 'Unable to load signature page. Please try again or contact support.' });
   }
 });
 
-// Submit signature for a slip
-router.post('/:id/sign', async (req: Request, res: Response) => {
+// Submit signature for a slip (PUBLIC - no auth required)
+router.post('/token/:token/sign', async (req: Request, res: Response) => {
   try {
-    const id = req.params.id;
+    const token = req.params.token;
     const { signatureData } = req.body as { signatureData?: string };
-    if (!signatureData) return res.status(400).json({ success: false, message: 'signatureData required' });
 
-    const slip: any = await SalarySlip.findById(id);
-    if (!slip) return res.status(404).json({ success: false, message: 'Slip not found' });
+    if (!token) {
+      return res.status(400).json({ success: false, message: 'Invalid link' });
+    }
+
+    if (!signatureData) {
+      return res.status(400).json({ success: false, message: 'Signature is required' });
+    }
+
+    const slip: any = await SalarySlip.findOne({ signatureToken: token });
+    if (!slip) {
+      return res.status(404).json({ success: false, message: 'Slip not found or invalid link' });
+    }
+
+    // Security: Check if token is expired
+    if (slip.signatureTokenExpiresAt && new Date() > new Date(slip.signatureTokenExpiresAt)) {
+      return res.status(410).json({ success: false, message: 'This signature link has expired. Please contact your administrator.' });
+    }
+
+    // Security: Check if already signed - prevent re-signing
+    if (slip.status === 'completed' || slip.status === 'signed' || slip.signedAt) {
+      return res.status(400).json({ success: false, message: 'This slip has already been signed. You cannot sign it again.' });
+    }
+
+    // Security: Mark token as used
+    slip.signatureTokenUsed = true;
 
     slip.signatureData = signatureData;
     slip.signedAt = new Date();
@@ -259,16 +331,16 @@ router.post('/:id/sign', async (req: Request, res: Response) => {
     // generate signed PDF and upload
     if (generateSalarySlipPDF) {
       try {
-        console.log(`Generating signed PDF for slip ${slip._id}...`);
+        console.log(`[PUBLIC SIGNING] Generating signed PDF for slip ${slip._id}...`);
         const pdfPath = await generateSalarySlipPDF(slip, { includeSignature: true });
         slip.pdfPath = pdfPath;
-        console.log(`PDF generated at: ${pdfPath}`);
+        console.log(`[PUBLIC SIGNING] PDF generated at: ${pdfPath}`);
 
         if (uploadToCloudinary) {
-          console.log(`Uploading PDF to Cloudinary...`);
+          console.log(`[PUBLIC SIGNING] Uploading PDF to Cloudinary...`);
           const destName = `finance/salary_slip_${slip.slipId || slip._id}_signed.pdf`;
           const cloudinaryData = await uploadToCloudinary(pdfPath, destName);
-          console.log(`Cloudinary upload success: ${cloudinaryData.cloudinaryUrl}`);
+          console.log(`[PUBLIC SIGNING] Cloudinary upload success: ${cloudinaryData.cloudinaryUrl}`);
           
           slip.pdfUrl = cloudinaryData.cloudinaryUrl;
           slip.pdfPublicId = cloudinaryData.publicId;
@@ -278,31 +350,40 @@ router.post('/:id/sign', async (req: Request, res: Response) => {
           slip.pdfFileName = cloudinaryData.fileName;
           slip.storageProvider = 'cloudinary';
         } else {
-          console.warn('Cloudinary service not available, skipping upload.');
+          console.warn('[PUBLIC SIGNING] Cloudinary service not available, skipping upload.');
         }
       } catch (e: any) {
-        console.error('PDF/Cloudinary signed generation/upload failed:', e.message || e);
+        console.error('[PUBLIC SIGNING] PDF/Cloudinary signed generation/upload failed:', e.message || e);
       }
     } else {
-      console.warn('PDF Service not available, skipping signed PDF generation.');
+      console.warn('[PUBLIC SIGNING] PDF Service not available, skipping signed PDF generation.');
     }
 
     await slip.save();
 
-    // notify owner
+    // notify owner (fire-and-forget)
     try {
       const ownerEmail = process.env.OWNER_EMAIL || process.env.EMAIL_USER;
       if (emailService && emailService.sendSignatureConfirmationEmail && ownerEmail) {
         await emailService.sendSignatureConfirmationEmail({ slip, ownerEmail });
       }
     } catch (e: any) {
-      console.error('Owner notification failed', e.message || e);
+      console.error('[PUBLIC SIGNING] Owner notification failed:', e.message || e);
     }
 
-    res.json({ success: true, slip });
+    // Return safe response - no internal fields
+    res.json({
+      success: true,
+      message: 'Signature submitted successfully',
+      slip: {
+        _id: slip._id,
+        status: slip.status,
+        signedAt: slip.signedAt,
+      },
+    });
   } catch (err: any) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message || 'Failed to submit signature' });
+    console.error('[PUBLIC SIGNING] Submit signature error:', err.message || err);
+    res.status(500).json({ success: false, message: 'Unable to submit signature. Please try again or contact support.' });
   }
 });
 

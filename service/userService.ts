@@ -2,6 +2,6 @@ import { User, IUser } from '../models/User';
 
 export const userService = {
 	async getAllUsers(): Promise<IUser[]> {
-		return User.find({}).sort({ createdAt: -1 });
+		return User.find({}).select('_id name email role createdAt updatedAt').sort({ createdAt: -1 });
 	},
 };
