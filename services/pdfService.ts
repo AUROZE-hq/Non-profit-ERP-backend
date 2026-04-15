@@ -2,11 +2,41 @@ const PDFDocument = require('pdfkit');
 import fs from 'fs';
 import path from 'path';
 
-function formatCadAmount(value: number) {
-  return `CAD ${Number(value || 0).toLocaleString('en-CA', {
-    minimumFractionDigits: 2,
+function formatDollarAmount(value: number) {
+  const amount = Number(value || 0);
+  const hasCents = Math.round(amount * 100) % 100 !== 0;
+  return `$${amount.toLocaleString('en-CA', {
+    minimumFractionDigits: hasCents ? 2 : 0,
     maximumFractionDigits: 2,
   })}`;
+}
+
+function formatLongDate(value: Date) {
+  return value.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function resolveLogoPath() {
+  return path.join(__dirname, '..', 'public', 'logo.png');
+}
+
+function getAcknowledgementAmount(slip: any) {
+  if (typeof slip?.honorariumAmount === 'number') {
+    return slip.honorariumAmount;
+  }
+  if (typeof slip?.paymentAmount === 'number') {
+    return slip.paymentAmount;
+  }
+  return Number(slip?.netSalary || 0);
+}
+
+function getAcknowledgementDate(slip: any) {
+  const rawDate = slip?.paymentDate || slip?.paidAt || slip?.signedAt || slip?.sentAt || slip?.createdAt || new Date();
+  const date = new Date(rawDate);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
 /**
@@ -32,48 +62,51 @@ export async function generateSalarySlipPDF(slip: any, options: { includeSignatu
 
       doc.pipe(stream);
 
-      // --- Header ---
-      doc.fontSize(20).text(process.env.COMPANY_NAME || 'Your Company Ltd', { align: 'center' });
-      doc.fontSize(10).text(process.env.COMPANY_ADDRESS || '123 Business Street, City, Country', { align: 'center' });
-      doc.moveDown();
-      doc.fontSize(16).text('SALARY SLIP', { align: 'center', underline: true });
-      doc.moveDown();
+      const companyName = process.env.COMPANY_NAME || 'LOVECRY THE STREET KIDS ORGANIZATION';
+      const companyAddress = process.env.COMPANY_ADDRESS || '702-150 Cosburn Avenue,Toronto, ON, M4J 2L9';
+      const companyEmail = process.env.COMPANY_EMAIL || 'jwilson@lovecry.ca';
+      const companyPhone = process.env.COMPANY_PHONE || '+1 647-938-6440';
 
-      // --- Employee Info ---
-      doc.fontSize(12).text(`Employee Name: ${slip.employee?.name || 'N/A'}`);
-      doc.text(`Employee ID: ${slip.employee?.employeeId || 'N/A'}`);
-      doc.text(`Department: ${slip.employee?.department || 'N/A'}`);
-      doc.text(`Position: ${slip.employee?.position || 'N/A'}`);
-      doc.text(`Period: ${slip.period?.month || '-'}/${slip.period?.year || '-'}`);
-      doc.moveDown();
+      const participantName = String(slip?.employee?.name || '________________________');
+      const amountText = formatDollarAmount(getAcknowledgementAmount(slip));
+      const eventDate = getAcknowledgementDate(slip);
+      const eventDateText = formatLongDate(eventDate);
 
-      // --- Earnings Table ---
-      doc.fontSize(14).text('Earnings', { underline: true });
-      doc.fontSize(11);
-      const earnings = slip.earnings || {};
-      doc.text(`Basic Salary: ${formatCadAmount(earnings.basicSalary || 0)}`);
-      doc.text(`Allowances: ${formatCadAmount(earnings.allowances || 0)}`);
-      doc.text(`Bonus: ${formatCadAmount(earnings.bonus || 0)}`);
-      doc.text(`Overtime: ${formatCadAmount(earnings.overtime || 0)}`);
-      doc.moveDown();
+      // --- Logo (centered, optional) ---
+      const logoPath = resolveLogoPath();
+      if (fs.existsSync(logoPath)) {
+        const logoWidth = 90;
+        const logoX = (doc.page.width - logoWidth) / 2;
+        doc.image(logoPath, logoX, doc.y, { width: logoWidth });
+        doc.moveDown(4);
+      }
 
-      // --- Deductions Table ---
-      doc.fontSize(14).text('Deductions', { underline: true });
-      doc.fontSize(11);
-      const deductions = slip.deductions || {};
-      doc.text(`Tax: ${formatCadAmount(deductions.tax || 0)}`);
-      doc.text(`Insurance: ${formatCadAmount(deductions.insurance || 0)}`);
-      doc.text(`Other: ${formatCadAmount(deductions.other || 0)}`);
-      doc.moveDown();
-
-      // --- Net Salary ---
-      doc.fontSize(14).rect(50, doc.y, 400, 30).stroke();
-      doc.text(`NET SALARY: ${formatCadAmount(slip.netSalary || 0)}`, 60, doc.y + 10);
+      // --- Organization header ---
+      doc.font('Helvetica-Bold').fontSize(14).text(companyName, { align: 'center' });
+      doc.font('Helvetica').fontSize(10).text(companyAddress, { align: 'center' });
+      doc.fontSize(10).text(companyEmail, { align: 'center' });
+      doc.fontSize(10).text(companyPhone, { align: 'center' });
       doc.moveDown(2);
+
+      // --- Title and subtitle ---
+      doc.font('Helvetica-Bold').fontSize(18).text('LoveCry Wellness Series: Love is not a sin', { align: 'center' });
+      doc.moveDown(0.5);
+      doc.font('Helvetica-Bold').fontSize(15).text('Acknowledgment of Honorarium Payment', { align: 'center' });
+      doc.moveDown(2);
+
+      // --- Acknowledgment paragraph ---
+      const acknowledgementText = `I, ${participantName}, acknowledge that I have received an honorarium payment in the amount of ${amountText} on ${eventDateText} for my participation in the LoveCry Wellness Series. This honorarium reflects my contribution and involvement in the event, and I am grateful for the opportunity to participate.`;
+      doc.font('Helvetica').fontSize(12).text(acknowledgementText, {
+        align: 'left',
+        lineGap: 4,
+      });
+      doc.moveDown(3);
 
       // --- Signature ---
       if (options.includeSignature && slip.signatureData) {
-        doc.fontSize(12).text('Employee Signature:', { underline: true });
+        doc.font('Helvetica').fontSize(12).text('Signature');
+        doc.moveDown(0.4);
+
         // The signatureData is a base64 data URL: data:image/png;base64,xxxx
         const base64Data = slip.signatureData.replace(/^data:image\/\w+;base64,/, '');
         const buffer = Buffer.from(base64Data, 'base64');
@@ -86,10 +119,14 @@ export async function generateSalarySlipPDF(slip: any, options: { includeSignatu
         
         doc.moveDown();
         doc.text(`Signed At: ${slip.signedAt ? new Date(slip.signedAt).toLocaleString() : new Date().toLocaleString()}`);
+      } else {
+        doc.font('Helvetica').fontSize(12).text('Signature:');
+        doc.moveDown(1.2);
+        const lineY = doc.y;
+        doc.moveTo(50, lineY).lineTo(280, lineY).stroke();
+        doc.moveDown(1.2);
+        doc.text('Date:');
       }
-
-      // --- Footer ---
-      doc.fontSize(8).text('Generated automatically by ERP System', 50, doc.page.height - 50, { align: 'center' });
 
       doc.end();
 
