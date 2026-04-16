@@ -409,4 +409,68 @@ function fmtCad(n: any) {
   return Number(n || 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-module.exports = { sendSalarySlipEmail, sendSignatureConfirmationEmail, sendForgotPasswordEmail };
+async function sendFeedbackFormEmail({ feedback, link }: any) {
+  if (!feedback?.recipient?.email) {
+    throw new Error('Recipient email is missing; cannot send feedback email.');
+  }
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f4f6fb; margin: 0; padding: 0; }
+    .container { max-width: 620px; margin: 40px auto; background: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 6px 28px rgba(0,0,0,0.08); }
+    .header { background: #1a1a2e; padding: 36px 42px; text-align: center; }
+    .header h1 { color: #f0c040; margin: 0; font-size: 24px; }
+    .body { padding: 42px; }
+    .greeting { font-size: 17px; color: #1a1a2e; font-weight: 600; margin-bottom: 12px; }
+    .message { font-size: 14px; color: #555566; line-height: 1.8; margin-bottom: 30px; }
+    .cta { text-align: center; margin: 36px 0 24px; }
+    .btn { display: inline-block; background: #f0c040; color: #1a1a2e; font-weight: 700; font-size: 15px; padding: 16px 40px; border-radius: 10px; text-decoration: none; }
+    .footer { background: #f0f0f5; padding: 24px 40px; text-align: center; font-size: 11px; color: #aaaaaa; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>${COMPANY_NAME}</h1>
+    </div>
+    <div class="body">
+      <p class="greeting">Dear ${feedback.recipient.firstName},</p>
+      <p class="message">
+        We value your participation in <strong>${feedback.eventTitle}</strong> on <strong>${new Date(feedback.eventDate).toLocaleDateString()}</strong>.
+        Please take a moment to share your feedback with us by securely filling out the form below.
+      </p>
+      <div class="cta">
+        <a href="${link}" class="btn">📝 Complete Feedback Form</a>
+      </div>
+      <p class="message" style="margin-top: 20px;">
+        Your insight helps us improve and serve you better.
+      </p>
+    </div>
+    <div class="footer">
+      © ${new Date().getFullYear()} ${COMPANY_NAME}<br>
+      This is an automated request — please do not reply.
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+  try {
+    const info = await transporter.sendMail({
+      from: `"${COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
+      to: feedback.recipient.email,
+      subject: `Feedback Request: ${feedback.eventTitle} | ${COMPANY_NAME}`,
+      html,
+    });
+    console.log("✅ Feedback Email sent:", info.response);
+  } catch (error) {
+    console.error("❌ Feedback Email failed:", error);
+    throw error;
+  }
+}
+
+module.exports = { sendSalarySlipEmail, sendSignatureConfirmationEmail, sendForgotPasswordEmail, sendFeedbackFormEmail };
