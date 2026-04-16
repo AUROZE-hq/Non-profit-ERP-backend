@@ -9,9 +9,11 @@ import fs from 'fs';
 import { normalizePublicAppUrl } from './utils/publicUrl';
 
 const slipRoutes: express.Router = require('./routes/slips').default;
+const suggestionRoutes: express.Router = require('./routes/suggestions').default;
 const taskRoutes: express.Router = require('./routes/tasks').default;
 const authRoutes: express.Router = require('./routes/auth').default;
 const userRoutes: express.Router = require('./routes/user').default;
+const feedbackRoutes: express.Router = require('./routes/feedback').default;
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -58,9 +60,11 @@ if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
 // ── Routes
 app.use('/api/slips', slipRoutes);
+app.use('/api/suggestions', suggestionRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {
