@@ -39,6 +39,28 @@ function getAcknowledgementDate(slip: any) {
   return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
+function getSlipRole(slip: any) {
+  return String(slip?.role || 'participation').toLowerCase();
+}
+
+function getEventTitle(slip: any) {
+  return slip?.eventTitle || 'LoveCry Wellness Series';
+}
+
+function getSlipSubtitle(role: string) {
+  if (role === 'leadership') {
+    return 'Acknowledgment of Program Leadership Honorarium';
+  }
+  return 'Acknowledgment of Honorarium Payment';
+}
+
+function getAcknowledgementParagraph(role: string, eventTitle: string, participantName: string, amountText: string, eventDateText: string) {
+  if (role === 'leadership') {
+    return `I, ${participantName}, acknowledge that I have received an honorarium payment of ${amountText} for leading the ${eventTitle} program on ${eventDateText}. This payment is made in recognition of my role in facilitating and producing the program on the stated date.`;
+  }
+  return `I, ${participantName}, acknowledge that I have received an honorarium payment in the amount of ${amountText} on ${eventDateText} for my participation in the ${eventTitle}. This honorarium reflects my contribution and involvement in the event, and I am grateful for the opportunity to participate.`;
+}
+
 /**
  * Generate a Salary Slip PDF
  * @param slip The salary slip document from Mongoose
@@ -72,12 +94,17 @@ export async function generateSalarySlipPDF(slip: any, options: { includeSignatu
       const eventDate = getAcknowledgementDate(slip);
       const eventDateText = formatLongDate(eventDate);
 
+      const role = getSlipRole(slip);
+      const eventTitle = getEventTitle(slip);
+
       // --- Logo (centered, optional) ---
       const logoPath = resolveLogoPath();
       if (fs.existsSync(logoPath)) {
         const logoWidth = 90;
         const logoX = (doc.page.width - logoWidth) / 2;
         doc.image(logoPath, logoX, doc.y, { width: logoWidth });
+        doc.moveDown(1);
+        doc.font('Helvetica').fontSize(10).text('Love is not a sin', { align: 'center' });
         doc.moveDown(4);
       }
 
@@ -89,13 +116,13 @@ export async function generateSalarySlipPDF(slip: any, options: { includeSignatu
       doc.moveDown(2);
 
       // --- Title and subtitle ---
-      doc.font('Helvetica').fontSize(14).text('LoveCry Wellness Series: Love is not a sin', { align: 'center' });
+      doc.font('Helvetica-Bold').fontSize(16).text(eventTitle, { align: 'center' });
       doc.moveDown(0.5);
-      doc.font('Helvetica-Bold').fontSize(15).text('Acknowledgment of Honorarium Payment', { align: 'center' });
+      doc.font('Helvetica-Bold').fontSize(14).text(getSlipSubtitle(role), { align: 'center' });
       doc.moveDown(2);
 
       // --- Acknowledgment paragraph ---
-      const acknowledgementText = `I, ${participantName}, acknowledge that I have received an honorarium payment in the amount of ${amountText} on ${eventDateText} for my participation in the LoveCry Wellness Series. This honorarium reflects my contribution and involvement in the event, and I am grateful for the opportunity to participate.`;
+      const acknowledgementText = getAcknowledgementParagraph(role, eventTitle, participantName, amountText, eventDateText);
       doc.font('Helvetica').fontSize(12).text(acknowledgementText, {
         align: 'left',
         lineGap: 4,

@@ -206,7 +206,7 @@ async function sendSalarySlipEmail({ employee, slip, pdfPath }: any) {
 
     <div class="header">
       <h1>${COMPANY_NAME}</h1>
-      <p>Acknowledgment of Honorarium — ${period}</p>
+      <p>Acknowledgment of ${slip.role === 'leadership' ? 'Program Leadership Honorarium' : 'Honorarium'} — ${period}</p>
     </div>
 
     <div class="body">
@@ -214,7 +214,7 @@ async function sendSalarySlipEmail({ employee, slip, pdfPath }: any) {
       <p class="greeting">Dear ${employee.name},</p>
 
       <p class="message">
-        Your Acknowledgment of Honorarium Payment for <strong>${period}</strong> has been prepared.
+        Your Acknowledgment of Honorarium Payment for <strong>${slip.eventTitle || 'the program'}</strong> on <strong>${period}</strong> has been prepared.
         Please review the details below and click the button to sign digitally.
         Once signed, a copy will be securely stored in our records.
       </p>
@@ -290,7 +290,7 @@ try {
   const info = await transporter.sendMail({
     from: `"${COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
     to: employee.email,
-    subject: `Your Honorarium Slip – ${period} | ${COMPANY_NAME}`,
+    subject: `Your ${slip.role === 'leadership' ? 'Leadership' : 'Honorarium'} Slip – ${period} | ${COMPANY_NAME}`,
     html,
 attachments:
   pdfPath && fs.existsSync(pdfPath)
@@ -351,7 +351,7 @@ async function sendSignatureConfirmationEmail({ slip, ownerEmail }: any) {
   await transporter.sendMail({
     from: `"${COMPANY_NAME}" <${process.env.EMAIL_USER}>`,
     to: ownerEmail,
-    subject: `✅ Signed: ${slip.employee.name}'s Honorarium Slip – ${period}`,
+    subject: `✅ Signed: ${slip.employee.name}'s ${slip.role === 'leadership' ? 'Leadership' : 'Honorarium'} Slip – ${period}`,
     html,
   });
 }

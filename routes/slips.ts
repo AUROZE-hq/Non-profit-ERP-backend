@@ -97,16 +97,38 @@ async function dispatchSlipEmailInBackground(slipId: string) {
   }
 }
 
-// Create a salary slip and optionally send email (PROTECTED - admin/manager only)
-router.post('/', protect, authorize('admin', 'manager'), async (req: Request, res: Response) => {
+async function dispatchSlip(slipId: string, channel: string, shouldDispatchEmail: boolean) {
+  const slip: any = await SalarySlip.findById(slipId);
+  if (!slip) return;
+
+  const now = new Date();
+  if (channel === 'whatsapp') {
+    slip.sentAt = slip.sentAt || now;
+    slip.status = (slip.status === 'draft' || slip.status === 'pending_signature') ? 'pending_signature' : slip.status;
+    slip.lastActivityAt = now;
+    await slip.save();
+  }
+
+  if (shouldDispatchEmail) {
+    // Fire-and-forget async dispatch so SMTP delays never block response time.
+    void dispatchSlipEmailInBackground(String(slip._id));
+  }
+}
+
+// Create a salary slip and optionally send email (PROTECTED)
+router.post('/', protect, async (req: Request, res: Response) => {
   try {
+    const user = (req as any).user;
     const body: any = req.body || {};
     const channel = body.channel === 'whatsapp' ? 'whatsapp' : 'email';
-    const shouldDispatchEmail = channel === 'email' && Boolean(body.sendEmail);
+    const sendEmailReq = Boolean(body.sendEmail);
     const now = new Date();
     
     // Generate expiry: 48 hours from now
     const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+    
+    const isStaff = user.role === 'staff';
+    const approvalStatus = isStaff ? 'pending' : 'not_required';
     
     const slipData: any = {
       employee: body.employee || {},
@@ -115,14 +137,22 @@ router.post('/', protect, authorize('admin', 'manager'), async (req: Request, re
       deductions: body.deductions || {},
       netSalary: body.netSalary || 0,
       notes: body.notes || '',
-      status: body.sendEmail ? 'pending_signature' : (body.status || 'draft'),
+      role: body.role || 'participation',
+      eventTitle: body.eventTitle || '',
+      status: (!isStaff && body.sendEmail) ? 'pending_signature' : (body.status || 'draft'),
       deliveryChannel: channel,
-      emailStatus: shouldDispatchEmail ? 'queued' : 'not_requested',
-      emailQueuedAt: shouldDispatchEmail ? now : undefined,
+      emailStatus: (!isStaff && channel === 'email' && sendEmailReq) ? 'queued' : 'not_requested',
+      emailQueuedAt: (!isStaff && channel === 'email' && sendEmailReq) ? now : undefined,
       lastActivityAt: now,
       signatureToken: uuidv4(),
       signatureTokenExpiresAt: expiresAt,
       signatureTokenUsed: false,
+      createdBy: user._id,
+      createdByRole: user.role,
+      approvalStatus,
+      approvalRequestedAt: isStaff ? now : undefined,
+      requestedChannel: channel,
+      sendAfterApproval: isStaff,
     };
 
     const slip = new SalarySlip(slipData);
@@ -131,18 +161,12 @@ router.post('/', protect, authorize('admin', 'manager'), async (req: Request, re
     // generate PDF if pdf service available
     if (generateSalarySlipPDF) {
       try {
-        console.log(`Generating draft PDF for slip ${slip._id}...`);
         const pdfPath = await generateSalarySlipPDF(slip, { includeSignature: false });
         slip.pdfPath = pdfPath;
-        console.log(`Draft PDF generated at: ${pdfPath}`);
 
-        // upload to Cloudinary if available
         if (uploadToCloudinary) {
-          console.log(`Uploading draft PDF to Cloudinary...`);
           const destName = `finance/salary_slip_${slip.slipId || slip._id}.pdf`;
           const cloudinaryData = await uploadToCloudinary(pdfPath, destName);
-          console.log(`Cloudinary draft upload success: ${cloudinaryData.cloudinaryUrl}`);
-          
           slip.pdfUrl = cloudinaryData.cloudinaryUrl;
           slip.pdfPublicId = cloudinaryData.publicId;
           slip.pdfAssetId = cloudinaryData.assetId;
@@ -150,8 +174,6 @@ router.post('/', protect, authorize('admin', 'manager'), async (req: Request, re
           slip.pdfFolder = cloudinaryData.folder;
           slip.pdfFileName = cloudinaryData.fileName;
           slip.storageProvider = 'cloudinary';
-        } else {
-          console.warn('Cloudinary service not available for draft.');
         }
         await slip.save();
       } catch (e: any) {
@@ -159,31 +181,90 @@ router.post('/', protect, authorize('admin', 'manager'), async (req: Request, re
       }
     }
 
-    if (channel === 'whatsapp') {
-      slip.sentAt = slip.sentAt || now;
-      slip.status = slip.status === 'draft' ? 'pending_signature' : slip.status;
-      slip.lastActivityAt = new Date();
-      await slip.save();
+    if (!isStaff) {
+      await dispatchSlip(String(slip._id), channel, sendEmailReq && channel === 'email');
     }
 
     const signUrl = buildPublicSignUrl(String(slip.signatureToken));
-    const emailDispatch = shouldDispatchEmail ? 'queued' : 'not_requested';
-
+    
     res.json({
       success: true,
+      message: isStaff ? 'Slip submitted for approval' : 'Slip created successfully',
       slip,
       signatureToken: slip.signatureToken,
       signUrl,
-      emailDispatch,
     });
-
-    if (shouldDispatchEmail) {
-      // Fire-and-forget async dispatch so SMTP delays never block response time.
-      void dispatchSlipEmailInBackground(String(slip._id));
-    }
   } catch (err: any) {
     console.error(err);
     res.status(500).json({ success: false, message: err.message || 'Failed to create slip' });
+  }
+});
+
+// Get pending approvals (PROTECTED)
+router.get('/pending-approval', protect, async (req: Request, res: Response) => {
+  try {
+    const slips = await SalarySlip.find({ approvalStatus: 'pending' })
+      .sort({ approvalRequestedAt: -1 })
+      .populate('createdBy', 'name email role')
+      .lean();
+    res.json({ success: true, slips });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Approve a slip (PROTECTED - admin/manager only)
+router.post('/:id/approve', protect, authorize('admin', 'manager'), async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const slip: any = await SalarySlip.findById(req.params.id);
+    
+    if (!slip) {
+      return res.status(404).json({ success: false, message: 'Slip not found' });
+    }
+    
+    if (slip.approvalStatus !== 'pending') {
+      return res.status(400).json({ success: false, message: 'Slip is not pending approval' });
+    }
+    
+    slip.approvalStatus = 'approved';
+    slip.approvedAt = new Date();
+    slip.approvedBy = user._id;
+    await slip.save();
+    
+    // Trigger dispatch
+    await dispatchSlip(String(slip._id), slip.requestedChannel, slip.requestedChannel === 'email');
+    
+    res.json({ success: true, message: 'Slip approved and sent', slip });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Reject a slip (PROTECTED - admin/manager only)
+router.post('/:id/reject', protect, authorize('admin', 'manager'), async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const { reason } = req.body;
+    const slip: any = await SalarySlip.findById(req.params.id);
+    
+    if (!slip) {
+      return res.status(404).json({ success: false, message: 'Slip not found' });
+    }
+    
+    if (slip.approvalStatus !== 'pending') {
+      return res.status(400).json({ success: false, message: 'Slip is not pending approval' });
+    }
+    
+    slip.approvalStatus = 'rejected';
+    slip.rejectedAt = new Date();
+    slip.rejectedBy = user._id;
+    slip.rejectionReason = reason || '';
+    await slip.save();
+    
+    res.json({ success: true, message: 'Slip rejected', slip });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
@@ -281,6 +362,8 @@ router.get('/token/:token', async (req: Request, res: Response) => {
         other: slip.deductions?.other || 0,
       },
       status: slip.status,
+      role: slip.role,
+      eventTitle: slip.eventTitle,
       signedAt: slip.signedAt || null,
     };
 

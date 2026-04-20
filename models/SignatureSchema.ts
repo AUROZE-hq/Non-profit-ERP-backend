@@ -86,7 +86,20 @@ export interface ISalarySlip extends Document {
   pdfFileName?: string;
   storageProvider?: string;
 
+  role?: 'leadership' | 'participation';
+  eventTitle?: string;
+
   createdBy?: Types.ObjectId;
+  createdByRole?: 'admin' | 'manager' | 'staff';
+  approvalStatus?: 'not_required' | 'pending' | 'approved' | 'rejected';
+  approvalRequestedAt?: Date;
+  approvedAt?: Date;
+  approvedBy?: Types.ObjectId;
+  rejectedAt?: Date;
+  rejectedBy?: Types.ObjectId;
+  rejectionReason?: string;
+  requestedChannel?: 'email' | 'whatsapp';
+  sendAfterApproval?: boolean;
 
   createdAt?: Date;
   updatedAt?: Date;
@@ -98,6 +111,13 @@ export interface ISalarySlip extends Document {
 const salarySlipSchema = new Schema<ISalarySlip>(
   {
     slipId: { type: String, unique: true },
+
+    role: {
+      type: String,
+      enum: ['leadership', 'participation'],
+      default: 'participation',
+    },
+    eventTitle: { type: String, default: '' },
 
     employee: {
       ref: { type: Schema.Types.ObjectId, ref: 'Employee' },
@@ -178,6 +198,20 @@ const salarySlipSchema = new Schema<ISalarySlip>(
     storageProvider: String,
 
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    createdByRole: { type: String, enum: ['admin', 'manager', 'staff'] },
+    approvalStatus: { 
+      type: String, 
+      enum: ['not_required', 'pending', 'approved', 'rejected'],
+      default: 'not_required'
+    },
+    approvalRequestedAt: Date,
+    approvedAt: Date,
+    approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    rejectedAt: Date,
+    rejectedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    rejectionReason: String,
+    requestedChannel: { type: String, enum: ['email', 'whatsapp'] },
+    sendAfterApproval: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
