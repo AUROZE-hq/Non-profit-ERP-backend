@@ -88,6 +88,7 @@ export interface ISalarySlip extends Document {
 
   role?: 'leadership' | 'participation';
   eventTitle?: string;
+  eventId?: Types.ObjectId;
 
   createdBy?: Types.ObjectId;
   createdByRole?: 'admin' | 'manager' | 'staff';
@@ -118,6 +119,7 @@ const salarySlipSchema = new Schema<ISalarySlip>(
       default: 'participation',
     },
     eventTitle: { type: String, default: '' },
+    eventId: { type: Schema.Types.ObjectId, ref: 'Event' },
 
     employee: {
       ref: { type: Schema.Types.ObjectId, ref: 'Employee' },

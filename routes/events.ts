@@ -89,6 +89,20 @@ router.get('/summary', protect, async (req: Request, res: Response) => {
   }
 });
 
+// @desc    Get only approved events for dropdowns
+// @route   GET /api/events/approved
+// @access  Private
+router.get('/approved', protect, async (req: Request, res: Response) => {
+  try {
+    const events = await Event.find({ approvalStatus: 'approved' })
+      .select('_id eventName eventDate')
+      .sort({ eventDate: -1 });
+    res.json({ success: true, events });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message || 'Failed to fetch approved events' });
+  }
+});
+
 // @desc    Approve an event
 // @route   POST /api/events/:id/approve
 // @access  Private (Admin/Manager only)

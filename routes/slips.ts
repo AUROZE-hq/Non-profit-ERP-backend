@@ -139,6 +139,7 @@ router.post('/', protect, async (req: Request, res: Response) => {
       notes: body.notes || '',
       role: body.role || 'participation',
       eventTitle: body.eventTitle || '',
+      eventId: body.eventId || undefined,
       status: (!isStaff && body.sendEmail) ? 'pending_signature' : (body.status || 'draft'),
       deliveryChannel: channel,
       emailStatus: (!isStaff && channel === 'email' && sendEmailReq) ? 'queued' : 'not_requested',
