@@ -14,6 +14,8 @@ const taskRoutes: express.Router = require('./routes/tasks').default;
 const authRoutes: express.Router = require('./routes/auth').default;
 const userRoutes: express.Router = require('./routes/user').default;
 const feedbackRoutes: express.Router = require('./routes/feedback').default;
+const financeRoutes: express.Router = require('./routes/finance').default;
+const documentsRoutes: express.Router = require('./routes/documents').default;
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -65,6 +67,8 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/feedback', feedbackRoutes);
+app.use('/api/finance', financeRoutes);
+app.use('/api/documents', documentsRoutes);
 
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {
