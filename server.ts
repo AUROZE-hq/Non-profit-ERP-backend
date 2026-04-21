@@ -17,6 +17,7 @@ const feedbackRoutes: express.Router = require('./routes/feedback').default;
 const financeRoutes: express.Router = require('./routes/finance').default;
 const documentsRoutes: express.Router = require('./routes/documents').default;
 const eventRoutes: express.Router = require('./routes/events').default;
+const feedbackTemplateRoutes: express.Router = require('./routes/feedbackTemplates').default;
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -71,6 +72,7 @@ app.use('/api/feedback', feedbackRoutes);
 app.use('/api/finance', financeRoutes);
 app.use('/api/documents', documentsRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/feedback/templates', feedbackTemplateRoutes);
 
 // Health check
 app.get('/api/health', (req: Request, res: Response) => {
