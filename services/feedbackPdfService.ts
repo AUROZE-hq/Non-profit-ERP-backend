@@ -68,14 +68,6 @@ export async function generateFeedbackPDF(feedback: any) {
         
       doc.moveDown(2);
       
-      // --- Scales ---
-      const Scales = {
-        disagree: ['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree'],
-        dissatisfied: ['Very Dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very Satisfied'],
-        length: ['Too Short', 'Slightly Short', 'Just Right', 'Slightly Long', 'Too Long'],
-        frequency: ['Not at all (0)', 'Several days (1)', 'More than half the days (2)', 'Nearly every day (3)']
-      };
-
       // --- Helper to render question groups ---
       const printChecklistQuestion = (qText: string, selectedAns: string, options: string[]) => {
         doc.font('Helvetica-Bold').fontSize(10).text(qText);
@@ -92,63 +84,134 @@ export async function generateFeedbackPDF(feedback: any) {
         doc.moveDown(1);
       };
 
-      const printQuestionGroup = (title: string, answers: string[], scaleType: keyof typeof Scales) => {
-        if (!answers || answers.length === 0) return;
-        doc.font('Helvetica-Bold').fontSize(12).fillColor('#1a1a2e').text(title);
-        doc.fillColor('black');
-        doc.moveDown(0.5);
-        
-        const options = Scales[scaleType];
-        answers.forEach(ansRaw => {
-            let q = ansRaw;
-            let a = '';
-            for (const opt of options) {
-              if (ansRaw.endsWith(`: ${opt}`)) {
-                a = opt;
-                q = ansRaw.substring(0, ansRaw.length - opt.length - 2);
-                break;
+      // --- Fallback for and Legacy / Template-driven logic ---
+      const snapshot = feedback.templateSnapshot;
+      const ans = feedback.answers instanceof Map ? Object.fromEntries(feedback.answers) : (feedback.answers || {});
+
+      if (snapshot && snapshot.sections) {
+          // Dynamic Template Rendering
+          doc.font('Helvetica-Bold').fontSize(12).fillColor('#1a1a2e').text(snapshot.templateName || 'Feedback Responses');
+          doc.moveDown(1);
+          doc.fillColor('black');
+
+          snapshot.sections.forEach((section: any) => {
+              const sectionAns = ans[section.id];
+              
+              if (section.type === 'agree_disagree_group') {
+                  doc.font('Helvetica-Bold').fontSize(12).fillColor('#1a1a2e').text(section.mainQuestion);
+                  doc.fillColor('black');
+                  doc.moveDown(0.5);
+                  
+                  const options = section.optionSet || [];
+                  const subQuestions = section.subQuestions || [];
+                  const responses = Array.isArray(sectionAns) ? sectionAns : [];
+
+                  subQuestions.forEach((qText: string, idx: number) => {
+                      // Responses are expected to be "Question: Answer" or just find matching answer
+                      let selected = '';
+                      const rawResp = responses[idx];
+                      if (rawResp) {
+                          const splitIdx = rawResp.lastIndexOf(': ');
+                          selected = splitIdx !== -1 ? rawResp.substring(splitIdx + 2) : rawResp;
+                      }
+                      printChecklistQuestion(qText, selected, options);
+                  });
+                  doc.moveDown(0.5);
+              } 
+              else if (section.type === 'custom_checkbox') {
+                  doc.font('Helvetica-Bold').fontSize(12).fillColor('#1a1a2e').text(section.mainQuestion);
+                  doc.fillColor('black');
+                  doc.moveDown(0.5);
+
+                  const options = section.checkboxOptions || [];
+                  const selectedArr = Array.isArray(sectionAns) ? sectionAns : [sectionAns].filter(Boolean);
+                  
+                  options.forEach((opt: string) => {
+                      const isSelected = selectedArr.includes(opt);
+                      const mark = isSelected ? '[ X ]' : '[   ]';
+                      doc.font('Helvetica').fontSize(10).text(`${mark} ${opt}`);
+                      doc.moveDown(0.2);
+                  });
+                  doc.moveDown(1);
               }
-            }
-            // Fallback if not matched
-            if (!a) {
-                const splitIdx = ansRaw.lastIndexOf(': ');
-                if (splitIdx !== -1) {
-                  q = ansRaw.substring(0, splitIdx);
-                  a = ansRaw.substring(splitIdx + 2);
-                }
-            }
-            printChecklistQuestion(q, a, options);
-        });
-        doc.moveDown(0.5);
-      };
+              else if (section.type === 'text_answer') {
+                  doc.font('Helvetica-Bold').fontSize(12).fillColor('#1a1a2e').text(section.questionText);
+                  doc.fillColor('black');
+                  doc.moveDown(0.5);
 
-      const ans = feedback.answers || {};
-
-      printQuestionGroup('Today’s Session Experience', ans.sessionExperience, 'disagree');
-      printQuestionGroup('Group Connection', ans.groupConnection, 'dissatisfied');
-      printQuestionGroup('Personal Impact', ans.personalImpact, 'disagree');
-      printQuestionGroup('Session Structure', ans.sessionStructure, 'length');
-      
-      if (ans.expectationsMet) {
-          doc.font('Helvetica-Bold').fontSize(12).fillColor('#1a1a2e').text('Expectations Met');
-          doc.fillColor('black');
-          doc.moveDown(0.5);
-          printChecklistQuestion('Overall expectations', ans.expectationsMet, ['Beyond my expectations', 'Met as expected', 'Below my expectations']);
-      }
-      
-      printQuestionGroup('Over the past week', ans.weeklyWellbeing, 'frequency');
-
-      if (ans.optionalFeedback) {
-          doc.font('Helvetica-Bold').fontSize(12).fillColor('#1a1a2e').text('Optional Feedback');
-          doc.fillColor('black');
-          doc.moveDown(0.5);
-          doc.font('Helvetica-Bold').fontSize(10).text('How could we improve future sessions or what topics would you like to see next time?');
-          doc.moveDown(0.3);
-          doc.font('Helvetica').fontSize(10).text(ans.optionalFeedback, {
-              align: 'left',
-              lineGap: 4
+                  const answerText = typeof sectionAns === 'string' ? sectionAns : 'No answer provided.';
+                  doc.font('Helvetica').fontSize(10).text(answerText, {
+                      align: 'left',
+                      lineGap: 4
+                  });
+                  doc.moveDown(1.5);
+              }
           });
-          doc.moveDown(1.5);
+
+      } else {
+          // --- LEGACY HARDCODED FALLBACK ---
+          const Scales = {
+            disagree: ['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree'],
+            dissatisfied: ['Very Dissatisfied', 'Dissatisfied', 'Neutral', 'Satisfied', 'Very Satisfied'],
+            length: ['Too Short', 'Slightly Short', 'Just Right', 'Slightly Long', 'Too Long'],
+            frequency: ['Not at all (0)', 'Several days (1)', 'More than half the days (2)', 'Nearly every day (3)']
+          };
+
+          const printQuestionGroup = (title: string, groupAns: string[], scaleType: keyof typeof Scales) => {
+            if (!groupAns || groupAns.length === 0) return;
+            doc.font('Helvetica-Bold').fontSize(12).fillColor('#1a1a2e').text(title);
+            doc.fillColor('black');
+            doc.moveDown(0.5);
+            
+            const options = Scales[scaleType];
+            groupAns.forEach(ansRaw => {
+                let q = ansRaw;
+                let a = '';
+                for (const opt of options) {
+                  if (ansRaw.endsWith(`: ${opt}`)) {
+                    a = opt;
+                    q = ansRaw.substring(0, ansRaw.length - opt.length - 2);
+                    break;
+                  }
+                }
+                if (!a) {
+                    const splitIdx = ansRaw.lastIndexOf(': ');
+                    if (splitIdx !== -1) {
+                      q = ansRaw.substring(0, splitIdx);
+                      a = ansRaw.substring(splitIdx + 2);
+                    }
+                }
+                printChecklistQuestion(q, a, options);
+            });
+            doc.moveDown(0.5);
+          };
+
+          printQuestionGroup('Today’s Session Experience', ans.sessionExperience, 'disagree');
+          printQuestionGroup('Group Connection', ans.groupConnection, 'dissatisfied');
+          printQuestionGroup('Personal Impact', ans.personalImpact, 'disagree');
+          printQuestionGroup('Session Structure', ans.sessionStructure, 'length');
+          
+          if (ans.expectationsMet) {
+              doc.font('Helvetica-Bold').fontSize(12).fillColor('#1a1a2e').text('Expectations Met');
+              doc.fillColor('black');
+              doc.moveDown(0.5);
+              printChecklistQuestion('Overall expectations', ans.expectationsMet, ['Beyond my expectations', 'Met as expected', 'Below my expectations']);
+          }
+          
+          printQuestionGroup('Over the past week', ans.weeklyWellbeing, 'frequency');
+
+          if (ans.optionalFeedback) {
+              doc.font('Helvetica-Bold').fontSize(12).fillColor('#1a1a2e').text('Optional Feedback');
+              doc.fillColor('black');
+              doc.moveDown(0.5);
+              doc.font('Helvetica-Bold').fontSize(10).text('How could we improve future sessions or what topics would you like to see next time?');
+              doc.moveDown(0.3);
+              doc.font('Helvetica').fontSize(10).text(ans.optionalFeedback, {
+                  align: 'left',
+                  lineGap: 4
+              });
+              doc.moveDown(1.5);
+          }
       }
 
       doc.end();

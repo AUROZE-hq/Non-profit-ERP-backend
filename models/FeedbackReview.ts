@@ -23,8 +23,15 @@ export interface IFeedbackReview extends Document {
   reviewKey: string; // Used for deduplication
   token: string;
   tokenExpiresAt: Date;
-
   status: FeedbackStatus;
+
+  // Template linkage
+  templateId?: Types.ObjectId;
+  templateName?: string;
+  templateSnapshot?: {
+    templateName: string;
+    sections: any[];
+  };
 
   sentAt?: Date;
   respondedAt?: Date;
@@ -35,15 +42,7 @@ export interface IFeedbackReview extends Document {
   pdfPublicId?: string;
   storageProvider?: string;
 
-  answers?: {
-    sessionExperience?: string[];
-    groupConnection?: string[];
-    personalImpact?: string[];
-    sessionStructure?: string[];
-    expectationsMet?: string;
-    weeklyWellbeing?: string[];
-    optionalFeedback?: string;
-  };
+  answers?: any; // Keyed by sectionId
 
   createdBy?: Types.ObjectId;
   createdAt: Date;
@@ -91,14 +90,17 @@ const feedbackReviewSchema = new Schema<IFeedbackReview>(
     pdfPublicId: { type: String },
     storageProvider: { type: String },
 
+    templateId: { type: Schema.Types.ObjectId, ref: 'FeedbackTemplate' },
+    templateName: { type: String },
+    templateSnapshot: {
+      templateName: { type: String },
+      sections: [{ type: Schema.Types.Mixed }],
+    },
+
     answers: {
-      sessionExperience: [{ type: String }],
-      groupConnection: [{ type: String }],
-      personalImpact: [{ type: String }],
-      sessionStructure: [{ type: String }],
-      expectationsMet: { type: String },
-      weeklyWellbeing: [{ type: String }],
-      optionalFeedback: { type: String },
+      type: Map,
+      of: Schema.Types.Mixed,
+      default: {},
     },
 
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },

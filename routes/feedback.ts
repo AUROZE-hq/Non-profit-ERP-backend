@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { protect, authorize } from '../middleware/authMiddleware';
 import { buildPublicSignUrl } from '../utils/publicUrl';
 import { FeedbackReview } from '../models/FeedbackReview';
+import { FeedbackTemplate } from '../models/FeedbackTemplate';
 
 const requireAny: any = require;
 
@@ -86,6 +87,20 @@ router.post('/', protect, authorize('admin', 'manager'), async (req: Request, re
     const body: any = req.body || {};
     const channel = body.channel === 'whatsapp' ? 'whatsapp' : 'email';
     const shouldDispatchEmail = channel === 'email';
+    const templateId = body.templateId;
+
+    if (!templateId) {
+      return res.status(400).json({ success: false, message: 'Feedback template selection is required.' });
+    }
+
+    const template = await FeedbackTemplate.findById(templateId);
+    if (!template) {
+      return res.status(404).json({ success: false, message: 'Selected template not found.' });
+    }
+
+    if (template.approvalStatus !== 'approved' || !template.isActive) {
+      return res.status(400).json({ success: false, message: 'Selected template is not approved or active.' });
+    }
     
     // Build candidate reviewKey
     const emailStr = (body.recipient?.email || '').toLowerCase().trim();
@@ -97,11 +112,22 @@ router.post('/', protect, authorize('admin', 'manager'), async (req: Request, re
 
     let feedback: any = await FeedbackReview.findOne({ reviewKey: candidateReviewKey });
     
+    // Create template snapshot
+    const templateSnapshot = {
+        templateName: template.templateName,
+        sections: template.sections
+    };
+
     if (feedback) {
         // Dedupe logic: Record exists for this person + event.
         if (feedback.status === 'completed' || feedback.status === 'expired') {
             return res.status(400).json({ success: false, message: 'This participant has already submitted feedback or it is expired.' });
         }
+        // Update template if it was a draft or sent but not completed
+        feedback.templateId = templateId;
+        feedback.templateName = template.templateName;
+        feedback.templateSnapshot = templateSnapshot;
+
         // It's pending, just restart sending to the new channel
         if (!feedback.deliveryChannels.includes(channel)) {
             feedback.deliveryChannels.push(channel);
@@ -120,7 +146,10 @@ router.post('/', protect, authorize('admin', 'manager'), async (req: Request, re
             deliveryChannels: [channel],
             emailStatus: shouldDispatchEmail ? 'queued' : 'not_requested',
             status: 'sent',
-            sentAt: new Date()
+            sentAt: new Date(),
+            templateId: templateId,
+            templateName: template.templateName,
+            templateSnapshot: templateSnapshot
         });
         await feedback.save();
     }
@@ -183,7 +212,8 @@ router.get('/token/:token', async (req: Request, res: Response) => {
       },
       eventTitle: feedback.eventTitle,
       eventDate: feedback.eventDate,
-      status: feedback.status
+      status: feedback.status,
+      templateSnapshot: feedback.templateSnapshot
     };
 
     res.json({ success: true, feedback: safeFeedback });
