@@ -55,9 +55,14 @@ export async function generateFeedbackPDF(feedback: any) {
       // --- Meta details ---
       doc.font('Helvetica-Bold').fontSize(11).text('Participant Details:');
       doc.font('Helvetica').fontSize(11)
-        .text(`Name: ${participantName}`)
-        .text(`Email: ${feedback.recipient.email}`)
-        .text(`Phone: ${feedback.recipient.phoneNumber || 'N/A'}`);
+        .text(`Name: ${participantName}`);
+        
+      if (feedback.recipient.email) {
+        doc.text(`Email: ${feedback.recipient.email}`);
+      }
+      if (feedback.recipient.phoneNumber) {
+        doc.text(`Phone: ${feedback.recipient.phoneNumber}`);
+      }
         
       doc.moveDown(1);
       doc.font('Helvetica-Bold').fontSize(11).text('Event Details:');
